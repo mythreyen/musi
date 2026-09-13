@@ -1,0 +1,10 @@
+.DS_Store
+
+# Xcode user and build data
+xcuserdata/
+DerivedData/
+build/
+
+# Build products and debug symbols
+Products/
+dSYMs/
