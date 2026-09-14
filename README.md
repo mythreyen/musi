@@ -1,7 +1,7 @@
 # Musi
 
 <p align="center">
-  <img src="C:\Users\Mythreyen Sakthivel\Documents\Illus\Musi logo [Recovered].png" alt="Musi banner" width="100%">
+  <img src="Musi/Musi logo [Recovered].png" alt="Musi banner" width="100%">
 </p>
 
 <p align="center">
