@@ -1,7 +1,7 @@
 # Musi
 
 <p align="center">
-  <img src="docs/images/musi-logo.png" alt="Musi logo" width="160">
+  <img src="docs/images/Musi logo.png" alt="Musi logo" width="160">
 </p>
 
 <p align="center">
