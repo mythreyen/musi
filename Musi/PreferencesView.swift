@@ -134,7 +134,9 @@ struct SettingsHeaderView: View {
                 Spacer()
                 
                 Button {
-                    NSApp.keyWindow?.close()
+                    for window in NSApp.windows where window.title == "Musi Settings" {
+                        window.close()
+                    }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .bold))

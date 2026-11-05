@@ -260,6 +260,10 @@ struct MiniPlayerView: View {
                         Spacer(minLength: 0)
                         
                         HStack(spacing: 14) {
+                            MiniUtilityButton(icon: "gearshape.fill", isActive: false) {
+                                (NSApp.delegate as? AppDelegate)?.openPreferences()
+                            }
+                            
                             MiniUtilityButton(
                                 icon: music.sleepTimerRemaining != nil ? "moon.zzz.fill" : "moon.zzz",
                                 isActive: music.sleepTimerRemaining != nil
@@ -282,7 +286,7 @@ struct MiniPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1 : 0)
+                        .opacity(isHoveringIcons ? 1.0 : 0.65)
                         .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
@@ -364,6 +368,10 @@ struct CompactPlayerView: View {
                         Spacer(minLength: 0)
                         
                         HStack(spacing: 6) {
+                            CompactUtilityButton(icon: "gearshape.fill", isActive: false) {
+                                (NSApp.delegate as? AppDelegate)?.openPreferences()
+                            }
+
                             CompactUtilityButton(
                                 icon: music.sleepTimerRemaining != nil ? "moon.zzz.fill" : "moon.zzz",
                                 isActive: music.sleepTimerRemaining != nil
@@ -386,7 +394,7 @@ struct CompactPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1 : 0)
+                        .opacity(isHoveringIcons ? 1.0 : 0.65)
                         .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
@@ -544,7 +552,7 @@ struct LyricsHeaderBar: View {
                     withAnimation(.easeInOut(duration: 0.3)) { music.showLyrics = false }
                 }
             }
-            .opacity(isHoveringIcons ? 1 : 0)
+            .opacity(isHoveringIcons ? 1.0 : 0.65)
             .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
@@ -659,7 +667,7 @@ struct HeaderBar: View {
                     }
                 }
             }
-            .opacity(isHoveringIcons ? 1 : 0)
+            .opacity(isHoveringIcons ? 1.0 : 0.65)
             .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
