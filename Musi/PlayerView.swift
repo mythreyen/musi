@@ -63,7 +63,7 @@ struct PlayerView: View {
         .animation(.timingCurve(0.16, 1.0, 0.3, 1.0, duration: 0.5), value: music.playerStyle)
         .preferredColorScheme(.dark)
         .contextMenu {
-            Button("Preferences...") {
+            Button("Settings...") {
                 (NSApp.delegate as? AppDelegate)?.openPreferences()
             }
             Divider()
@@ -77,7 +77,7 @@ struct PlayerView: View {
                 withAnimation { music.isWindowLocked.toggle() }
             }
             Divider()
-            Button("Quit MusicBar") {
+            Button("Quit Musi") {
                 NSApplication.shared.terminate(nil)
             }
         }
@@ -627,6 +627,14 @@ struct HeaderBar: View {
             Spacer()
             
             HStack(spacing: 12) {
+                StandardUtilityButton(
+                    icon: "gearshape.fill",
+                    isActive: false,
+                    helpText: "Settings (⌘,)"
+                ) {
+                    (NSApp.delegate as? AppDelegate)?.openPreferences()
+                }
+
                 StandardUtilityButton(
                     icon: music.sleepTimerRemaining != nil ? "moon.zzz.fill" : "moon.zzz",
                     isActive: music.sleepTimerRemaining != nil,

@@ -32,8 +32,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.action = #selector(toggleMainPanel)
+            button.action = #selector(statusItemClicked(_:))
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         
         menuBarAnimator = MenuBarAnimator(statusItem: statusItem, musicController: musicController)
@@ -243,6 +244,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Animation Engine
     
+    @objc func statusItemClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || (event?.modifierFlags.contains(.control) == true) {
+            showStatusContextMenu()
+        } else {
+            toggleMainPanel()
+        }
+    }
+
     @objc func toggleMainPanel() {
         if panel.isVisible { hideMainPanel() } else { showMainPanel(side: .center) }
     }
@@ -509,12 +519,131 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func handleMediaHotkey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command && event.charactersIgnoringModifiers == "," {
+            openPreferences()
+            return true
+        }
         if flags == [.command, .shift] {
             if event.keyCode == 124 { musicController.nextTrack(); return true }
             else if event.keyCode == 123 { musicController.previousTrack(); return true }
             else if event.keyCode == 49 { musicController.togglePlayPause(); return true }
         }
         return false
+    }
+
+    // MARK: - Status Menu Actions
+
+    @objc func openPreferencesAction() {
+        openPreferences()
+    }
+
+    @objc func menuTogglePlayPause() {
+        musicController.togglePlayPause()
+    }
+
+    @objc func menuNextTrack() {
+        musicController.nextTrack()
+    }
+
+    @objc func menuPrevTrack() {
+        musicController.previousTrack()
+    }
+
+    @objc func menuChangeLayout(_ sender: NSMenuItem) {
+        if let style = sender.representedObject as? PlayerStyle {
+            musicController.playerStyle = style
+        }
+    }
+
+    @objc func menuChangeSource(_ sender: NSMenuItem) {
+        if let source = sender.representedObject as? String {
+            musicController.targetPlayer = source
+        }
+    }
+
+    @objc func menuToggleLyrics() {
+        musicController.showLyrics.toggle()
+    }
+
+    @objc func menuTogglePin() {
+        musicController.isPinned.toggle()
+    }
+
+    @objc func menuQuit() {
+        NSApplication.shared.terminate(nil)
+    }
+
+    func showStatusContextMenu() {
+        let menu = NSMenu()
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openPreferencesAction), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let nowPlayingTitle = musicController.isPlaying ? "Now Playing: \(musicController.trackName)" : "Playback Paused"
+        let nowPlayingItem = NSMenuItem(title: nowPlayingTitle, action: nil, keyEquivalent: "")
+        nowPlayingItem.isEnabled = false
+        menu.addItem(nowPlayingItem)
+
+        let playItem = NSMenuItem(title: musicController.isPlaying ? "Pause" : "Play", action: #selector(menuTogglePlayPause), keyEquivalent: " ")
+        playItem.target = self
+        menu.addItem(playItem)
+
+        let nextItem = NSMenuItem(title: "Next Track", action: #selector(menuNextTrack), keyEquivalent: "")
+        nextItem.target = self
+        menu.addItem(nextItem)
+
+        let prevItem = NSMenuItem(title: "Previous Track", action: #selector(menuPrevTrack), keyEquivalent: "")
+        prevItem.target = self
+        menu.addItem(prevItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let layoutMenu = NSMenu()
+        for style in PlayerStyle.allCases {
+            let item = NSMenuItem(title: style.displayName, action: #selector(menuChangeLayout(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = style
+            item.state = (musicController.playerStyle == style) ? .on : .off
+            layoutMenu.addItem(item)
+        }
+        let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
+        layoutItem.submenu = layoutMenu
+        menu.addItem(layoutItem)
+
+        let sourceMenu = NSMenu()
+        for (label, val) in [("Apple Music", "Music"), ("Spotify", "Spotify")] {
+            let item = NSMenuItem(title: label, action: #selector(menuChangeSource(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = val
+            item.state = (musicController.targetPlayer == val) ? .on : .off
+            sourceMenu.addItem(item)
+        }
+        let sourceItem = NSMenuItem(title: "Audio Source", action: nil, keyEquivalent: "")
+        sourceItem.submenu = sourceMenu
+        menu.addItem(sourceItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let lyricsItem = NSMenuItem(title: musicController.showLyrics ? "Hide Lyrics" : "Show Lyrics", action: #selector(menuToggleLyrics), keyEquivalent: "l")
+        lyricsItem.target = self
+        menu.addItem(lyricsItem)
+
+        let pinItem = NSMenuItem(title: musicController.isPinned ? "Unpin from Desktop" : "Pin to Desktop", action: #selector(menuTogglePin), keyEquivalent: "")
+        pinItem.target = self
+        menu.addItem(pinItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit Musi", action: #selector(menuQuit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
     }
 
     func openPreferences() {

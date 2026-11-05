@@ -6,6 +6,22 @@ enum PlayerStyle: Int, CaseIterable {
     case standard = 0
     case mini = 1
     case compact = 2
+    
+    var displayName: String {
+        switch self {
+        case .standard: return "Standard"
+        case .mini: return "Mini"
+        case .compact: return "Compact"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .standard: return "rectangle.portrait.fill"
+        case .mini: return "rectangle.fill"
+        case .compact: return "square.fill"
+        }
+    }
 }
 
 struct LyricLine: Identifiable, Hashable {

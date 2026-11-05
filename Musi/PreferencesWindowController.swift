@@ -4,12 +4,13 @@ import SwiftUI
 class PreferencesWindowController: NSWindowController {
     convenience init(musicController: MusicController) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 660),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 600),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         
+        window.title = "Musi Settings"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
