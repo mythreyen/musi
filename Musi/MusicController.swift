@@ -55,7 +55,13 @@ class MusicController: ObservableObject {
     @Published var lyrics: [LyricLine]? = nil
     @Published var activeLyricIndex: Int? = nil
     @Published var isFetchingLyrics: Bool = false
-    @Published var showLyrics: Bool = false
+    @Published var showLyrics: Bool = false {
+        didSet {
+            if showLyrics && lyrics == nil && !isFetchingLyrics && !trackName.isEmpty && trackName != "Not Playing" {
+                fetchLyrics(track: trackName, artist: artistName, duration: duration)
+            }
+        }
+    }
     
     // Independent Lyrics Window State
     @Published var isLyricsPinned: Bool = UserDefaults.standard.bool(forKey: "isLyricsPinned") {
@@ -112,7 +118,7 @@ class MusicController: ObservableObject {
         didSet { UserDefaults.standard.set(pinnedOpacity, forKey: "pinnedOpacity") }
     }
     
-    @Published var targetPlayer: String = UserDefaults.standard.string(forKey: "targetPlayer") ?? "Music" {
+    @Published var targetPlayer: String = UserDefaults.standard.string(forKey: "targetPlayer") ?? "Auto" {
         didSet {
             UserDefaults.standard.set(targetPlayer, forKey: "targetPlayer")
             lastTrackName = ""
@@ -121,6 +127,27 @@ class MusicController: ObservableObject {
             activeLyricIndex = nil
             pollState()
             refreshPlaylists()
+        }
+    }
+
+    @Published var resolvedPlayer: String = "Spotify"
+    private var lastActivePlayer: String = "Spotify"
+
+    func determinePlayerToPoll() -> String {
+        if targetPlayer == "Music" { return "Music" }
+        if targetPlayer == "Spotify" { return "Spotify" }
+        
+        let spotRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty
+        let musicRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty
+        
+        if spotRunning && !musicRunning {
+            return "Spotify"
+        } else if musicRunning && !spotRunning {
+            return "Music"
+        } else if spotRunning && musicRunning {
+            return lastActivePlayer
+        } else {
+            return lastActivePlayer
         }
     }
 
@@ -154,6 +181,21 @@ class MusicController: ObservableObject {
     }
     
     @objc private func handlePlaybackChange(_ notification: Notification) {
+        if notification.name.rawValue == "com.spotify.client.PlaybackStateChanged" {
+            lastActivePlayer = "Spotify"
+            if targetPlayer == "Auto" {
+                DispatchQueue.main.async { [weak self] in
+                    self?.resolvedPlayer = "Spotify"
+                }
+            }
+        } else if notification.name.rawValue == "com.apple.Music.playerInfo" {
+            lastActivePlayer = "Music"
+            if targetPlayer == "Auto" {
+                DispatchQueue.main.async { [weak self] in
+                    self?.resolvedPlayer = "Music"
+                }
+            }
+        }
         pollState()
     }
     
@@ -180,47 +222,67 @@ class MusicController: ObservableObject {
         queue.async { [weak self] in
             guard let self else { return }
             
-            let appName = self.targetPlayer
+            let appName = self.determinePlayerToPoll()
+            DispatchQueue.main.async { [weak self] in
+                if self?.resolvedPlayer != appName {
+                    self?.resolvedPlayer = appName
+                }
+            }
 
-            let src = """
-            if application "\(appName)" is running then
-                tell application "\(appName)"
-                    set pState to player state as string
-                    set vol    to (sound volume) as string
-                    
-                    set shuf to "false"
-                    set rep to "off"
-                    try
-                        if "\(appName)" is "Music" then
-                            set shuf to shuffle enabled as string
-                            set rep to song repeat as string
-                        else if "\(appName)" is "Spotify" then
-                            set shuf to shuffling as string
-                            if repeating then
-                                set rep to "all"
-                            else
-                                set rep to "off"
-                            end if
+            let src: String
+            if appName == "Spotify" {
+                src = """
+                if application "Spotify" is running then
+                    tell application "Spotify"
+                        set pState to player state as string
+                        set vol    to (sound volume) as string
+                        set shuf   to shuffling as string
+                        if repeating then
+                            set rep to "all"
+                        else
+                            set rep to "off"
                         end if
-                    end try
+                        try
+                            set tName   to name of current track
+                            set tArtist to artist of current track
+                            set tAlbum  to album of current track
+                            set tDur    to (duration of current track) as string
+                            set tPos    to (player position) as string
+                            return "1|" & pState & "|" & tName & "|" & tArtist & "|" & tAlbum & "|" & tDur & "|" & tPos & "|" & vol & "|" & shuf & "|" & rep
+                        on error
+                            return "1|" & pState & "||||0|0|" & vol & "|" & shuf & "|" & rep
+                        end try
+                    end tell
+                else
+                    return "0|stopped||||0|0|50|false|off"
+                end if
+                """
+            } else {
+                src = """
+                if application "Music" is running then
+                    tell application "Music"
+                        set pState to player state as string
+                        set vol    to (sound volume) as string
+                        set shuf   to shuffle enabled as string
+                        set rep    to song repeat as string
+                        try
+                            set tName   to name of current track
+                            set tArtist to artist of current track
+                            set tAlbum  to album of current track
+                            set tDur    to (duration of current track) as string
+                            set tPos    to (player position) as string
+                            return "1|" & pState & "|" & tName & "|" & tArtist & "|" & tAlbum & "|" & tDur & "|" & tPos & "|" & vol & "|" & shuf & "|" & rep
+                        on error
+                            return "1|" & pState & "||||0|0|" & vol & "|" & shuf & "|" & rep
+                        end try
+                    end tell
+                else
+                    return "0|stopped||||0|0|50|false|off"
+                end if
+                """
+            }
 
-                    try
-                        set tName   to name of current track
-                        set tArtist to artist of current track
-                        set tAlbum  to album of current track
-                        set tDur    to (duration of current track) as string
-                        set tPos    to (player position) as string
-                        return "1|" & pState & "|" & tName & "|" & tArtist & "|" & tAlbum & "|" & tDur & "|" & tPos & "|" & vol & "|" & shuf & "|" & rep
-                    on error
-                        return "1|" & pState & "|||0|0|" & vol & "|" & shuf & "|" & rep
-                    end try
-                end tell
-            else
-                return "0|stopped|||0|0|50|false|off"
-            end if
-            """
-
-            let raw = self.runString(src) ?? "0|stopped|||0|0|50|false|off"
+            let raw = self.runString(src) ?? "0|stopped||||0|0|50|false|off"
             var parts = raw.components(separatedBy: "|")
             while parts.count > 10 { parts[2] += "|" + parts.remove(at: 3) }
             guard parts.count == 10 else { return }
@@ -236,7 +298,7 @@ class MusicController: ObservableObject {
             let shuf    = parts[8] == "true"
             let rep     = parts[9]
             
-            if appName == "Spotify" && dur > 5000 {
+            if appName == "Spotify" && dur > 500 {
                 dur = dur / 1000.0
             }
 
@@ -265,11 +327,13 @@ class MusicController: ObservableObject {
                     self.lastTrackName = name
                     self.queue.async { [weak self] in self?.fetchArtwork() }
                     
-                    self.fetchLyrics(track: name, artist: artist)
+                    self.fetchLyrics(track: name, artist: artist, duration: dur)
                     
                     if !oldName.isEmpty && !name.isEmpty && name != "Not Playing" {
                         self.showTrackToast(message: name)
                     }
+                } else if self.albumArt == nil && playing && !name.isEmpty && name != "Not Playing" {
+                    self.queue.async { [weak self] in self?.fetchArtwork() }
                 }
             }
         }
@@ -277,70 +341,189 @@ class MusicController: ObservableObject {
 
     // MARK: – LRC Live Lyrics Engine
     
-    private func fetchLyrics(track: String, artist: String) {
+    private func sanitizeTrackName(_ title: String) -> String {
+        var cleaned = title
+        cleaned = cleaned.replacingOccurrences(of: #"\s*[\(\[](feat\.|ft\.|with).*?[\)\]]"#, with: "", options: [.regularExpression, .caseInsensitive])
+        cleaned = cleaned.replacingOccurrences(of: #"\s*-\s*(remaster(ed)?(\s*\d+)?|live|radio edit|single version|deluxe edition|bonus track).*$"#, with: "", options: [.regularExpression, .caseInsensitive])
+        cleaned = cleaned.replacingOccurrences(of: #"\s*[\(\[](explicit|clean)[\)\]]"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func fetchLyrics(track: String, artist: String, duration: Double) {
+        guard !track.isEmpty && track != "Not Playing" else {
+            DispatchQueue.main.async {
+                self.lyrics = nil
+                self.activeLyricIndex = nil
+                self.isFetchingLyrics = false
+            }
+            return
+        }
+
         DispatchQueue.main.async {
             self.lyrics = nil
             self.activeLyricIndex = nil
             self.isFetchingLyrics = true
         }
         
-        let cleanTrack = track.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let cleanArtist = artist.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let dur = Int(self.duration)
+        let rawTrack = track.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTrack = sanitizeTrackName(rawTrack)
+        let dur = Int(duration)
         
-        let urlString = "https://lrclib.net/api/get?track_name=\(cleanTrack)&artist_name=\(cleanArtist)&duration=\(dur)"
-        guard let url = URL(string: urlString) else {
+        // Stage 1: Try exact /api/get with duration and original track name
+        var comp1 = URLComponents(string: "https://lrclib.net/api/get")
+        var items1 = [
+            URLQueryItem(name: "track_name", value: rawTrack),
+            URLQueryItem(name: "artist_name", value: rawArtist)
+        ]
+        if dur > 0 {
+            items1.append(URLQueryItem(name: "duration", value: "\(dur)"))
+        }
+        comp1?.queryItems = items1
+        
+        guard let url1 = comp1?.url else {
+            DispatchQueue.main.async { self.isFetchingLyrics = false }
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url1) { [weak self] data, response, error in
+            if let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["statusCode"] as? Int != 404 {
+                if self?.applyLyricsJSON(json) == true {
+                    return
+                }
+            }
+            
+            // Stage 2: Try /api/get with sanitized track name
+            var comp2 = URLComponents(string: "https://lrclib.net/api/get")
+            var items2 = [
+                URLQueryItem(name: "track_name", value: cleanTrack),
+                URLQueryItem(name: "artist_name", value: rawArtist)
+            ]
+            if dur > 0 {
+                items2.append(URLQueryItem(name: "duration", value: "\(dur)"))
+            }
+            comp2?.queryItems = items2
+            
+            guard let url2 = comp2?.url else {
+                self?.performLyricsSearch(track: cleanTrack, artist: rawArtist)
+                return
+            }
+            
+            URLSession.shared.dataTask(with: url2) { [weak self] data2, response2, error2 in
+                if let data2 = data2,
+                   let json2 = try? JSONSerialization.jsonObject(with: data2) as? [String: Any],
+                   json2["statusCode"] as? Int != 404 {
+                    if self?.applyLyricsJSON(json2) == true {
+                        return
+                    }
+                }
+                
+                // Stage 3: Try /api/search with sanitized track name & artist
+                self?.performLyricsSearch(track: cleanTrack, artist: rawArtist)
+            }.resume()
+        }.resume()
+    }
+    
+    private func performLyricsSearch(track: String, artist: String) {
+        var comp = URLComponents(string: "https://lrclib.net/api/search")
+        comp?.queryItems = [
+            URLQueryItem(name: "track_name", value: track),
+            URLQueryItem(name: "artist_name", value: artist)
+        ]
+        
+        guard let url = comp?.url else {
             DispatchQueue.main.async { self.isFetchingLyrics = false }
             return
         }
         
         URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data, error == nil else {
-                DispatchQueue.main.async { self?.isFetchingLyrics = false }
+            guard let data = data, error == nil,
+                  let results = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !results.isEmpty else {
+                self?.performGenericLyricsSearch(query: "\(artist) \(track)")
                 return
             }
             
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               json["statusCode"] as? Int != 404 {
-                if let syncedLyrics = json["syncedLyrics"] as? String, !syncedLyrics.isEmpty {
-                    let parsed = self?.parseLRC(syncedLyrics)
-                    DispatchQueue.main.async {
-                        self?.lyrics = parsed
-                        self?.isFetchingLyrics = false
-                    }
-                }
-                else if let plainLyrics = json["plainLyrics"] as? String, !plainLyrics.isEmpty {
-                    let lines = plainLyrics.components(separatedBy: "\n").map { LyricLine(time: -1, text: $0) }
-                    DispatchQueue.main.async {
-                        self?.lyrics = lines
-                        self?.isFetchingLyrics = false
-                    }
-                } else {
-                    DispatchQueue.main.async { self?.isFetchingLyrics = false }
-                }
-            } else {
-                let fallbackUrlString = "https://lrclib.net/api/get?track_name=\(cleanTrack)&artist_name=\(cleanArtist)"
-                guard let fallbackUrl = URL(string: fallbackUrlString) else {
-                    DispatchQueue.main.async { self?.isFetchingLyrics = false }
-                    return
-                }
-                
-                URLSession.shared.dataTask(with: fallbackUrl) { [weak self] data2, response2, error2 in
-                    defer { DispatchQueue.main.async { self?.isFetchingLyrics = false } }
-                    guard let data2 = data2, error2 == nil else { return }
-                    
-                    if let json2 = try? JSONSerialization.jsonObject(with: data2) as? [String: Any] {
-                        if let syncedLyrics = json2["syncedLyrics"] as? String, !syncedLyrics.isEmpty {
-                            let parsed = self?.parseLRC(syncedLyrics)
-                            DispatchQueue.main.async { self?.lyrics = parsed }
-                        } else if let plainLyrics = json2["plainLyrics"] as? String, !plainLyrics.isEmpty {
-                            let lines = plainLyrics.components(separatedBy: "\n").map { LyricLine(time: -1, text: $0) }
-                            DispatchQueue.main.async { self?.lyrics = lines }
-                        }
-                    }
-                }.resume()
+            // Prefer a result with syncedLyrics
+            if let syncedResult = results.first(where: {
+                if let s = $0["syncedLyrics"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                return false
+            }) {
+                if self?.applyLyricsJSON(syncedResult) == true { return }
+            }
+            
+            // Fallback to first result with plainLyrics
+            if let plainResult = results.first(where: {
+                if let p = $0["plainLyrics"] as? String, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                return false
+            }) {
+                if self?.applyLyricsJSON(plainResult) == true { return }
+            }
+            
+            self?.performGenericLyricsSearch(query: "\(artist) \(track)")
+        }.resume()
+    }
+
+    private func performGenericLyricsSearch(query: String) {
+        var comp = URLComponents(string: "https://lrclib.net/api/search")
+        comp?.queryItems = [
+            URLQueryItem(name: "q", value: query)
+        ]
+        guard let url = comp?.url else {
+            DispatchQueue.main.async { self.isFetchingLyrics = false }
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            defer { DispatchQueue.main.async { self?.isFetchingLyrics = false } }
+            guard let data = data,
+                  let results = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !results.isEmpty else {
+                return
+            }
+            
+            if let syncedResult = results.first(where: {
+                if let s = $0["syncedLyrics"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                return false
+            }) {
+                _ = self?.applyLyricsJSON(syncedResult)
+                return
+            }
+            
+            if let plainResult = results.first(where: {
+                if let p = $0["plainLyrics"] as? String, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                return false
+            }) {
+                _ = self?.applyLyricsJSON(plainResult)
+                return
             }
         }.resume()
+    }
+
+    @discardableResult
+    private func applyLyricsJSON(_ json: [String: Any]) -> Bool {
+        if let syncedLyrics = json["syncedLyrics"] as? String, !syncedLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let parsed = self.parseLRC(syncedLyrics)
+            if !parsed.isEmpty {
+                DispatchQueue.main.async {
+                    self.lyrics = parsed
+                    self.isFetchingLyrics = false
+                }
+                return true
+            }
+        }
+        
+        if let plainLyrics = json["plainLyrics"] as? String, !plainLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let cleanPlain = plainLyrics.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            let lines = cleanPlain.components(separatedBy: "\n").map { LyricLine(time: -1, text: $0) }
+            DispatchQueue.main.async {
+                self.lyrics = lines
+                self.isFetchingLyrics = false
+            }
+            return true
+        }
+        
+        return false
     }
     
     private func parseLRC(_ lrc: String) -> [LyricLine] {
@@ -403,10 +586,22 @@ class MusicController: ObservableObject {
     }
     
     private func fetchFallbackArtwork(track: String, artist: String) {
-        let term = "\(artist) \(track)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let urlString = "https://itunes.apple.com/search?term=\(term)&entity=song&limit=5"
+        let cleanTrack = sanitizeTrackName(track)
+        let cleanArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        guard let url = URL(string: urlString) else {
+        guard !cleanTrack.isEmpty else {
+            DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
+            return
+        }
+        
+        var comp = URLComponents(string: "https://itunes.apple.com/search")
+        comp?.queryItems = [
+            URLQueryItem(name: "term", value: "\(cleanArtist) \(cleanTrack)"),
+            URLQueryItem(name: "entity", value: "song"),
+            URLQueryItem(name: "limit", value: "5")
+        ]
+        
+        guard let url = comp?.url else {
             DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
             return
         }
@@ -421,8 +616,8 @@ class MusicController: ObservableObject {
                let results = json["results"] as? [[String: Any]], !results.isEmpty {
                 
                 var bestMatchUrl: String? = nil
-                let cleanTargetTrack = track.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                let cleanTargetArtist = artist.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                let cleanTargetTrack = cleanTrack.lowercased()
+                let cleanTargetArtist = cleanArtist.lowercased()
                 
                 for result in results {
                     let resultTrack = (result["trackName"] as? String ?? "").lowercased()
@@ -437,12 +632,14 @@ class MusicController: ObservableObject {
                     }
                 }
                 
-                guard let artworkUrl = bestMatchUrl else {
+                let artworkUrl = bestMatchUrl ?? (results.first?["artworkUrl100"] as? String)
+                
+                guard let finalUrl = artworkUrl else {
                     DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
                     return
                 }
                 
-                let hdUrlString = artworkUrl.replacingOccurrences(of: "100x100bb", with: "600x600bb")
+                let hdUrlString = finalUrl.replacingOccurrences(of: "100x100bb", with: "600x600bb")
                 guard let hdUrl = URL(string: hdUrlString) else { return }
                 
                 URLSession.shared.dataTask(with: hdUrl) { [weak self] imgData, _, _ in
@@ -465,8 +662,18 @@ class MusicController: ObservableObject {
         }.resume()
     }
     
-    private func fetchArtwork() {
-        let appName = self.targetPlayer
+    func fetchArtwork() {
+        let appName = self.resolvedPlayer
+        let currentTrack = self.trackName
+        let currentArtist = self.artistName
+        
+        guard !currentTrack.isEmpty && currentTrack != "Not Playing" else {
+            DispatchQueue.main.async { [weak self] in
+                self?.albumArt = nil
+                self?.dominantColor = NSColor(hue: 0.72, saturation: 0.45, brightness: 0.45, alpha: 1)
+            }
+            return
+        }
         
         if appName == "Spotify" {
             let src = """
@@ -479,27 +686,38 @@ class MusicController: ObservableObject {
             end tell
             """
             
-            guard let urlString = runString(src),
-                  urlString.hasPrefix("http"),
-                  let url = URL(string: urlString) else {
-                DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
-                return
+            var urlString = runString(src)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let raw = urlString, raw == "success" || raw.isEmpty {
+                urlString = nil
             }
             
-            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-                guard let data = data, let image = NSImage(data: data) else {
-                    DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
-                    return
-                }
+            if let str = urlString, str.hasPrefix("spotify:image:") {
+                let id = str.replacingOccurrences(of: "spotify:image:", with: "")
+                urlString = "https://i.scdn.co/image/\(id)"
+            } else if let str = urlString, str.hasPrefix("http://") {
+                urlString = "https://" + str.dropFirst(7)
+            }
+            
+            if let validUrlString = urlString,
+               validUrlString.hasPrefix("https://"),
+               let url = URL(string: validUrlString) {
                 
-                let compressed = self?.compressImage(image) ?? image
-                let color = AlbumColorExtractor.extract(from: compressed)
-                
-                DispatchQueue.main.async { [weak self] in
-                    self?.albumArt = compressed
-                    self?.dominantColor = color
-                }
-            }.resume()
+                URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+                    if let data = data, let image = NSImage(data: data) {
+                        let compressed = self?.compressImage(image) ?? image
+                        let color = AlbumColorExtractor.extract(from: compressed)
+                        
+                        DispatchQueue.main.async { [weak self] in
+                            self?.albumArt = compressed
+                            self?.dominantColor = color
+                        }
+                    } else {
+                        self?.fetchFallbackArtwork(track: currentTrack, artist: currentArtist)
+                    }
+                }.resume()
+            } else {
+                self.fetchFallbackArtwork(track: currentTrack, artist: currentArtist)
+            }
             
         } else {
             let src = """
@@ -536,7 +754,7 @@ class MusicController: ObservableObject {
                     self?.dominantColor = color
                 }
             } else {
-                self.fetchFallbackArtwork(track: self.trackName, artist: self.artistName)
+                self.fetchFallbackArtwork(track: currentTrack, artist: currentArtist)
             }
         }
     }
@@ -544,7 +762,7 @@ class MusicController: ObservableObject {
     // MARK: – Playlists
     
     func refreshPlaylists() {
-        let appName = self.targetPlayer
+        let appName = self.resolvedPlayer
         
         if appName == "Spotify" {
             DispatchQueue.main.async { [weak self] in self?.playlists = [] }
@@ -587,7 +805,7 @@ class MusicController: ObservableObject {
     }
     
     func playPlaylist(_ name: String) {
-        let appName = self.targetPlayer
+        let appName = self.resolvedPlayer
         if appName == "Spotify" { return }
         
         let safe = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
@@ -617,7 +835,7 @@ class MusicController: ObservableObject {
     
     func togglePlayPause() {
         let willPlay = !isPlaying
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         showPlaybackToast(message: willPlay ? "Playing" : "Paused", icon: willPlay ? "play.fill" : "pause.fill")
         
         DispatchQueue.main.async { [weak self] in self?.isPlaying = willPlay }
@@ -625,24 +843,24 @@ class MusicController: ObservableObject {
     }
 
     func previousTrack() {
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         showPlaybackToast(message: "Previous", icon: "backward.fill")
         queue.async { [weak self] in self?.runString("tell application \"\(player)\" to back track") }
     }
 
     func nextTrack() {
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         showPlaybackToast(message: "Skipped", icon: "forward.fill")
         queue.async { [weak self] in self?.runString("tell application \"\(player)\" to next track") }
     }
 
     func seek(to time: Double) {
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         queue.async { [weak self] in self?.runString("tell application \"\(player)\" to set player position to \(time)") }
     }
     
     func toggleShuffle() {
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         let newState = !isShuffleEnabled
         
         DispatchQueue.main.async { [weak self] in self?.isShuffleEnabled = newState }
@@ -656,7 +874,7 @@ class MusicController: ObservableObject {
     }
 
     func toggleRepeat() {
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         var nextState = "off"
         
         if player == "Music" {
@@ -760,7 +978,7 @@ class MusicController: ObservableObject {
 
     func setVolume(to value: Double) {
         let clamped = max(0, min(100, value))
-        let player = self.targetPlayer
+        let player = self.resolvedPlayer
         
         // 🔥 THE FIX: Robust edge-detection so haptic feedback fires exactly once
         if clamped == 0 || clamped == 100 {

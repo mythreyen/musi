@@ -68,7 +68,7 @@ struct PreferencesView: View {
                         Circle()
                             .fill(music.isPlaying ? Color.green : Color.white.opacity(0.3))
                             .frame(width: 7, height: 7)
-                        Text(music.isPlaying ? "Playing on \(music.targetPlayer)" : "Ready • \(music.targetPlayer)")
+                        Text(music.isPlaying ? "Playing on \(music.resolvedPlayer)" : "Ready • \(music.resolvedPlayer)")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.45))
                     }
@@ -216,7 +216,17 @@ struct GeneralSettingsTab: View {
         VStack(spacing: 18) {
             // Audio Source Card
             LiquidGlassSection(title: "MUSIC SERVICE", subtitle: "Select your active music streaming provider") {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    AudioServiceButton(
+                        serviceName: "Auto Detect",
+                        identifier: "Auto",
+                        icon: "sparkles",
+                        accentColor: .blue,
+                        isSelected: music.targetPlayer == "Auto"
+                    ) {
+                        music.targetPlayer = "Auto"
+                    }
+
                     AudioServiceButton(
                         serviceName: "Apple Music",
                         identifier: "Music",
