@@ -521,6 +521,14 @@ struct LyricsHeaderBar: View {
             Spacer()
             HStack(spacing: 12) {
                 StandardUtilityButton(
+                    icon: music.isLyricsWindowLocked ? "lock.fill" : "lock.open",
+                    isActive: music.isLyricsWindowLocked,
+                    helpText: music.isLyricsWindowLocked ? "Unlock Lyrics Window" : "Lock Lyrics Window Position"
+                ) {
+                    withAnimation(.easeInOut(duration: 0.15)) { music.isLyricsWindowLocked.toggle() }
+                }
+                
+                StandardUtilityButton(
                     icon: "link",
                     isActive: music.isLyricsMagnetic,
                     helpText: music.isLyricsMagnetic ? "Unlink from Player" : "Magnetically Link to Player"
