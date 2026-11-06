@@ -6,16 +6,5 @@
 	<string>MusicBar needs accessibility to ensure smooth window behavior.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Musi needs permission to control and display music playback from Spotify and Apple Music.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-	<key>com.apple.security.app-sandbox</key>
-	<false/>
-	<key>com.apple.security.assets.music.read-write</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
 </dict>
 </plist>
