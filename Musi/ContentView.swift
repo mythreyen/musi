@@ -20,7 +20,9 @@ struct ContentView: View {
 }
 
 #if DEBUG
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }
 #endif

@@ -15,26 +15,28 @@ enum AlbumColorExtractor {
 
         var hueAccumulators: [Int: (h: Double, s: Double, b: Double, count: Int)] = [:]
 
-        for y in 0..<64 {
-            for x in 0..<64 {
-                guard let color = bitmap.colorAt(x: x, y: y) else { continue }
+        autoreleasepool {
+            for y in 0..<64 {
+                for x in 0..<64 {
+                    guard let color = bitmap.colorAt(x: x, y: y) else { continue }
 
-                var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                color.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+                    var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                    color.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
 
-                // Skip transparent, near-white, near-black, near-grey
-                guard a > 0.5, s > 0.18, b > 0.15, b < 0.97 else { continue }
+                    // Skip transparent, near-white, near-black, near-grey
+                    guard a > 0.5, s > 0.18, b > 0.15, b < 0.97 else { continue }
 
-                // Bucket hues into 24 segments (15° each) for dominance voting
-                let bucket = Int(h * 24) % 24
-                if var acc = hueAccumulators[bucket] {
-                    acc.h     += Double(h)
-                    acc.s     += Double(s)
-                    acc.b     += Double(b)
-                    acc.count += 1
-                    hueAccumulators[bucket] = acc
-                } else {
-                    hueAccumulators[bucket] = (Double(h), Double(s), Double(b), 1)
+                    // Bucket hues into 24 segments (15° each) for dominance voting
+                    let bucket = Int(h * 24) % 24
+                    if var acc = hueAccumulators[bucket] {
+                        acc.h     += Double(h)
+                        acc.s     += Double(s)
+                        acc.b     += Double(b)
+                        acc.count += 1
+                        hueAccumulators[bucket] = acc
+                    } else {
+                        hueAccumulators[bucket] = (Double(h), Double(s), Double(b), 1)
+                    }
                 }
             }
         }

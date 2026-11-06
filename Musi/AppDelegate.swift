@@ -53,8 +53,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         setupMenuBarSwipeDetector()
         setupEventMonitors()
         
-        // Hotkey Setup
+        // Hotkey Setup (Clean Carbon API registration, zero global keylogging)
         HotKeyManager.shared.action = { [weak self] in self?.toggleMainPanel() }
+        HotKeyManager.shared.playPauseAction = { [weak self] in self?.musicController.togglePlayPause() }
+        HotKeyManager.shared.nextTrackAction = { [weak self] in self?.musicController.nextTrack() }
+        HotKeyManager.shared.prevTrackAction = { [weak self] in self?.musicController.previousTrack() }
         HotKeyManager.shared.registerSavedHotKey()
 
         // Automatically present the main player panel on launch
@@ -171,10 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
         
-        // Media Hotkeys
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            _ = self?.handleMediaHotkey(event)
-        }
+        // Local hotkeys when Musi panels are active (zero system-wide raw keylogging)
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if self?.handleMediaHotkey(event) == true { return nil }
             return event
@@ -298,10 +298,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             targetY = screen.visibleFrame.maxY - targetSize.height - gap
         case .center:
             let defaults = UserDefaults.standard
+            var usedSavedAnchor = false
             if defaults.bool(forKey: "hasSavedAnchor") {
-                targetX = CGFloat(defaults.double(forKey: "anchorX")) - (targetSize.width / 2)
-                targetY = CGFloat(defaults.double(forKey: "anchorY")) - targetSize.height
-            } else {
+                let savedX = CGFloat(defaults.double(forKey: "anchorX"))
+                let savedY = CGFloat(defaults.double(forKey: "anchorY"))
+                let pointInActiveScreen = NSScreen.screens.contains { s in
+                    s.visibleFrame.contains(NSPoint(x: savedX, y: savedY))
+                }
+                if pointInActiveScreen {
+                    targetX = savedX - (targetSize.width / 2)
+                    targetY = savedY - targetSize.height
+                    usedSavedAnchor = true
+                } else {
+                    defaults.removeObject(forKey: "hasSavedAnchor")
+                }
+            }
+            if !usedSavedAnchor {
                 let btnRect = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
                 targetX = btnRect.midX - (targetSize.width / 2)
                 targetY = btnRect.minY - targetSize.height - 6
@@ -329,7 +341,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if musicController.showLyrics && musicController.isLyricsMagnetic {
             updateLyricsPanelPosition(animate: false, forceSnap: true)
-            panel.addChildWindow(lyricsPanel, ordered: .above)
+            if !(panel.childWindows?.contains(lyricsPanel) ?? false) {
+                panel.addChildWindow(lyricsPanel, ordered: .above)
+            }
         }
 
         NSAnimationContext.runAnimationGroup { ctx in
@@ -342,6 +356,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func hideMainPanel() {
         musicController.playlistExpanded = false
+        if musicController.isLyricsPinned {
+            panel.removeChildWindow(lyricsPanel)
+        }
         var endFrame = panel.frame
         
         switch currentPanelSide {

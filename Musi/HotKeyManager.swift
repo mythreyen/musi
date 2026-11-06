@@ -5,7 +5,14 @@ class HotKeyManager {
     static let shared = HotKeyManager()
     
     var action: (() -> Void)?
-    private var hotKeyRef: EventHotKeyRef?
+    var playPauseAction: (() -> Void)?
+    var nextTrackAction: (() -> Void)?
+    var prevTrackAction: (() -> Void)?
+
+    private var hotKeyRefToggle: EventHotKeyRef?
+    private var hotKeyRefPlayPause: EventHotKeyRef?
+    private var hotKeyRefNext: EventHotKeyRef?
+    private var hotKeyRefPrev: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
     init() {
@@ -20,38 +27,74 @@ class HotKeyManager {
         let pointer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
-            guard let userData = userData else { return noErr }
+            guard let theEvent = theEvent, let userData = userData else { return noErr }
             let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
             
-            DispatchQueue.main.async {
-                manager.action?()
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                theEvent,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hotKeyID
+            )
+            
+            if status == noErr {
+                DispatchQueue.main.async {
+                    switch hotKeyID.id {
+                    case 1: manager.action?()
+                    case 2: manager.playPauseAction?()
+                    case 3: manager.nextTrackAction?()
+                    case 4: manager.prevTrackAction?()
+                    default: break
+                    }
+                }
             }
             return noErr
         }, 1, &eventType, pointer, &eventHandlerRef)
     }
 
     func registerSavedHotKey() {
-        // Unregister the previous hotkey if one exists
-        unregisterCurrentHotKey()
+        // Unregister any existing hotkeys first
+        unregisterAllHotKeys()
 
         let defaults = UserDefaults.standard
         
-        // Default combo if none is saved: Command (cmdKey = 256) + Shift (shiftKey = 512) + M (46)
+        // Custom / Saved Panel Toggle Shortcut (Default: ⌘ + ⇧ + M)
         let keyCode = defaults.object(forKey: "hotkeyCode") != nil ? UInt32(defaults.integer(forKey: "hotkeyCode")) : UInt32(kVK_ANSI_M)
         let modifiers = defaults.object(forKey: "hotkeyModifiers") != nil ? UInt32(defaults.integer(forKey: "hotkeyModifiers")) : UInt32(cmdKey | shiftKey)
 
-        var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType(0x4D426172)
-        hotKeyID.id = 1
+        let toggleID = EventHotKeyID(signature: OSType(0x4D426172), id: 1)
+        RegisterEventHotKey(keyCode, modifiers, toggleID, GetApplicationEventTarget(), 0, &hotKeyRefToggle)
 
-        RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+        // Global Media Hotkeys (Clean, isolated, non-keylogger registration)
+        // ⌘ + ⇧ + Space = Play / Pause
+        let playPauseID = EventHotKeyID(signature: OSType(0x4D426172), id: 2)
+        RegisterEventHotKey(UInt32(kVK_Space), UInt32(cmdKey | shiftKey), playPauseID, GetApplicationEventTarget(), 0, &hotKeyRefPlayPause)
+
+        // ⌘ + ⇧ + → = Next Track
+        let nextID = EventHotKeyID(signature: OSType(0x4D426172), id: 3)
+        RegisterEventHotKey(UInt32(kVK_RightArrow), UInt32(cmdKey | shiftKey), nextID, GetApplicationEventTarget(), 0, &hotKeyRefNext)
+
+        // ⌘ + ⇧ + ← = Previous Track
+        let prevID = EventHotKeyID(signature: OSType(0x4D426172), id: 4)
+        RegisterEventHotKey(UInt32(kVK_LeftArrow), UInt32(cmdKey | shiftKey), prevID, GetApplicationEventTarget(), 0, &hotKeyRefPrev)
     }
 
     func unregisterCurrentHotKey() {
-        if let ref = hotKeyRef {
+        if let ref = hotKeyRefToggle {
             UnregisterEventHotKey(ref)
-            hotKeyRef = nil
+            hotKeyRefToggle = nil
         }
+    }
+
+    func unregisterAllHotKeys() {
+        unregisterCurrentHotKey()
+        if let ref = hotKeyRefPlayPause { UnregisterEventHotKey(ref); hotKeyRefPlayPause = nil }
+        if let ref = hotKeyRefNext { UnregisterEventHotKey(ref); hotKeyRefNext = nil }
+        if let ref = hotKeyRefPrev { UnregisterEventHotKey(ref); hotKeyRefPrev = nil }
     }
     
     // Helper utility to turn carbon modifiers into readable string characters

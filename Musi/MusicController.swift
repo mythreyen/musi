@@ -153,7 +153,22 @@ class MusicController: ObservableObject {
 
     private var scrubberTimer: Timer?
     private var syncTimer: Timer?
-    private let queue = DispatchQueue(label: "com.musicbar.as", qos: .userInitiated)
+    
+    // Decoupled queues: immediate playback transport vs. utility background metadata
+    private let playbackQueue = DispatchQueue(label: "com.musicbar.playback", qos: .userInteractive)
+    private let metadataQueue = DispatchQueue(label: "com.musicbar.metadata", qos: .utility)
+
+    // Stale network request cancellation & generation tracking
+    private var activeLyricTaskId = UUID()
+    private var currentLyricDataTask: URLSessionDataTask?
+    private var currentArtworkDataTask: URLSessionDataTask?
+
+    private let urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 8.0
+        config.timeoutIntervalForResource = 15.0
+        return URLSession(configuration: config)
+    }()
 
     init() {
         setupObservers()
@@ -199,6 +214,16 @@ class MusicController: ObservableObject {
         pollState()
     }
     
+    private func updateSyncTimer(playing: Bool) {
+        syncTimer?.invalidate()
+        // Adaptive polling: 2s when active to stay responsive, 8s when paused to save battery
+        let interval: TimeInterval = playing ? 2.0 : 8.0
+        syncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.pollState()
+        }
+        RunLoop.main.add(syncTimer!, forMode: .common)
+    }
+
     private func startScrubberTimer() {
         scrubberTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
@@ -209,17 +234,12 @@ class MusicController: ObservableObject {
                 }
             }
         }
-        
-        syncTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.pollState()
-        }
-        
         RunLoop.main.add(scrubberTimer!, forMode: .common)
-        RunLoop.main.add(syncTimer!, forMode: .common)
+        updateSyncTimer(playing: false)
     }
 
     private func pollState() {
-        queue.async { [weak self] in
+        metadataQueue.async { [weak self] in
             guard let self else { return }
             
             let appName = self.determinePlayerToPoll()
@@ -229,9 +249,11 @@ class MusicController: ObservableObject {
                 }
             }
 
+            let sep = "\u{1F}"
             let src: String
             if appName == "Spotify" {
                 src = """
+                set sep to character id 31
                 if application "Spotify" is running then
                     tell application "Spotify"
                         set pState to player state as string
@@ -248,17 +270,18 @@ class MusicController: ObservableObject {
                             set tAlbum  to album of current track
                             set tDur    to (duration of current track) as string
                             set tPos    to (player position) as string
-                            return "1|" & pState & "|" & tName & "|" & tArtist & "|" & tAlbum & "|" & tDur & "|" & tPos & "|" & vol & "|" & shuf & "|" & rep
+                            return "1" & sep & pState & sep & tName & sep & tArtist & sep & tAlbum & sep & tDur & sep & tPos & sep & vol & sep & shuf & sep & rep
                         on error
-                            return "1|" & pState & "||||0|0|" & vol & "|" & shuf & "|" & rep
+                            return "1" & sep & pState & sep & "" & sep & "" & sep & "" & sep & "0" & sep & "0" & sep & vol & sep & shuf & sep & rep
                         end try
                     end tell
                 else
-                    return "0|stopped||||0|0|50|false|off"
+                    return "0" & sep & "stopped" & sep & "" & sep & "" & sep & "" & sep & "0" & sep & "0" & sep & "50" & sep & "false" & sep & "off"
                 end if
                 """
             } else {
                 src = """
+                set sep to character id 31
                 if application "Music" is running then
                     tell application "Music"
                         set pState to player state as string
@@ -271,20 +294,19 @@ class MusicController: ObservableObject {
                             set tAlbum  to album of current track
                             set tDur    to (duration of current track) as string
                             set tPos    to (player position) as string
-                            return "1|" & pState & "|" & tName & "|" & tArtist & "|" & tAlbum & "|" & tDur & "|" & tPos & "|" & vol & "|" & shuf & "|" & rep
+                            return "1" & sep & pState & sep & tName & sep & tArtist & sep & tAlbum & sep & tDur & sep & tPos & sep & vol & sep & shuf & sep & rep
                         on error
-                            return "1|" & pState & "||||0|0|" & vol & "|" & shuf & "|" & rep
+                            return "1" & sep & pState & sep & "" & sep & "" & sep & "" & sep & "0" & sep & "0" & sep & vol & sep & shuf & sep & rep
                         end try
                     end tell
                 else
-                    return "0|stopped||||0|0|50|false|off"
+                    return "0" & sep & "stopped" & sep & "" & sep & "" & sep & "" & sep & "0" & sep & "0" & sep & "50" & sep & "false" & sep & "off"
                 end if
                 """
             }
 
-            let raw = self.runString(src) ?? "0|stopped||||0|0|50|false|off"
-            var parts = raw.components(separatedBy: "|")
-            while parts.count > 10 { parts[2] += "|" + parts.remove(at: 3) }
+            let raw = self.runString(src) ?? "0\(sep)stopped\(sep)\(sep)\(sep)\(sep)0\(sep)0\(sep)50\(sep)false\(sep)off"
+            let parts = raw.components(separatedBy: sep)
             guard parts.count == 10 else { return }
 
             let running = parts[0] == "1"
@@ -304,6 +326,10 @@ class MusicController: ObservableObject {
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                
+                if self.isPlaying != playing {
+                    self.updateSyncTimer(playing: playing)
+                }
                 
                 self.isMusicRunning   = running
                 self.isPlaying        = playing
@@ -325,7 +351,7 @@ class MusicController: ObservableObject {
                 if name != self.lastTrackName {
                     let oldName = self.lastTrackName
                     self.lastTrackName = name
-                    self.queue.async { [weak self] in self?.fetchArtwork() }
+                    self.metadataQueue.async { [weak self] in self?.fetchArtwork() }
                     
                     self.fetchLyrics(track: name, artist: artist, duration: dur)
                     
@@ -333,7 +359,7 @@ class MusicController: ObservableObject {
                         self.showTrackToast(message: name)
                     }
                 } else if self.albumArt == nil && playing && !name.isEmpty && name != "Not Playing" {
-                    self.queue.async { [weak self] in self?.fetchArtwork() }
+                    self.metadataQueue.async { [weak self] in self?.fetchArtwork() }
                 }
             }
         }
@@ -350,19 +376,28 @@ class MusicController: ObservableObject {
     }
 
     func fetchLyrics(track: String, artist: String, duration: Double) {
+        currentLyricDataTask?.cancel()
+        currentLyricDataTask = nil
+        let requestId = UUID()
+        self.activeLyricTaskId = requestId
+
         guard !track.isEmpty && track != "Not Playing" else {
             DispatchQueue.main.async {
-                self.lyrics = nil
-                self.activeLyricIndex = nil
-                self.isFetchingLyrics = false
+                if self.activeLyricTaskId == requestId {
+                    self.lyrics = nil
+                    self.activeLyricIndex = nil
+                    self.isFetchingLyrics = false
+                }
             }
             return
         }
 
         DispatchQueue.main.async {
-            self.lyrics = nil
-            self.activeLyricIndex = nil
-            self.isFetchingLyrics = true
+            if self.activeLyricTaskId == requestId {
+                self.lyrics = nil
+                self.activeLyricIndex = nil
+                self.isFetchingLyrics = true
+            }
         }
         
         let rawTrack = track.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -382,15 +417,19 @@ class MusicController: ObservableObject {
         comp1?.queryItems = items1
         
         guard let url1 = comp1?.url else {
-            DispatchQueue.main.async { self.isFetchingLyrics = false }
+            DispatchQueue.main.async {
+                if self.activeLyricTaskId == requestId { self.isFetchingLyrics = false }
+            }
             return
         }
         
-        URLSession.shared.dataTask(with: url1) { [weak self] data, response, error in
-            if let data = data,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               json["statusCode"] as? Int != 404 {
-                if self?.applyLyricsJSON(json) == true {
+        currentLyricDataTask = urlSession.dataTask(with: url1) { [weak self] data, response, error in
+            guard let self = self, self.activeLyricTaskId == requestId else { return }
+            
+            if let http = response as? HTTPURLResponse, http.statusCode == 200,
+               let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if self.applyLyricsJSON(json, requestId: requestId) {
                     return
                 }
             }
@@ -407,26 +446,31 @@ class MusicController: ObservableObject {
             comp2?.queryItems = items2
             
             guard let url2 = comp2?.url else {
-                self?.performLyricsSearch(track: cleanTrack, artist: rawArtist)
+                self.performLyricsSearch(track: cleanTrack, artist: rawArtist, requestId: requestId)
                 return
             }
             
-            URLSession.shared.dataTask(with: url2) { [weak self] data2, response2, error2 in
-                if let data2 = data2,
-                   let json2 = try? JSONSerialization.jsonObject(with: data2) as? [String: Any],
-                   json2["statusCode"] as? Int != 404 {
-                    if self?.applyLyricsJSON(json2) == true {
+            self.currentLyricDataTask = self.urlSession.dataTask(with: url2) { [weak self] data2, response2, error2 in
+                guard let self = self, self.activeLyricTaskId == requestId else { return }
+                
+                if let http2 = response2 as? HTTPURLResponse, http2.statusCode == 200,
+                   let data2 = data2,
+                   let json2 = try? JSONSerialization.jsonObject(with: data2) as? [String: Any] {
+                    if self.applyLyricsJSON(json2, requestId: requestId) {
                         return
                     }
                 }
                 
                 // Stage 3: Try /api/search with sanitized track name & artist
-                self?.performLyricsSearch(track: cleanTrack, artist: rawArtist)
-            }.resume()
-        }.resume()
+                self.performLyricsSearch(track: cleanTrack, artist: rawArtist, requestId: requestId)
+            }
+            self.currentLyricDataTask?.resume()
+        }
+        currentLyricDataTask?.resume()
     }
     
-    private func performLyricsSearch(track: String, artist: String) {
+    private func performLyricsSearch(track: String, artist: String, requestId: UUID) {
+        guard self.activeLyricTaskId == requestId else { return }
         var comp = URLComponents(string: "https://lrclib.net/api/search")
         comp?.queryItems = [
             URLQueryItem(name: "track_name", value: track),
@@ -434,14 +478,18 @@ class MusicController: ObservableObject {
         ]
         
         guard let url = comp?.url else {
-            DispatchQueue.main.async { self.isFetchingLyrics = false }
+            DispatchQueue.main.async {
+                if self.activeLyricTaskId == requestId { self.isFetchingLyrics = false }
+            }
             return
         }
         
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data, error == nil,
+        currentLyricDataTask = urlSession.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self, self.activeLyricTaskId == requestId else { return }
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let data = data, error == nil,
                   let results = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !results.isEmpty else {
-                self?.performGenericLyricsSearch(query: "\(artist) \(track)")
+                self.performGenericLyricsSearch(query: "\(artist) \(track)", requestId: requestId)
                 return
             }
             
@@ -450,7 +498,7 @@ class MusicController: ObservableObject {
                 if let s = $0["syncedLyrics"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
                 return false
             }) {
-                if self?.applyLyricsJSON(syncedResult) == true { return }
+                if self.applyLyricsJSON(syncedResult, requestId: requestId) { return }
             }
             
             // Fallback to first result with plainLyrics
@@ -458,26 +506,36 @@ class MusicController: ObservableObject {
                 if let p = $0["plainLyrics"] as? String, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
                 return false
             }) {
-                if self?.applyLyricsJSON(plainResult) == true { return }
+                if self.applyLyricsJSON(plainResult, requestId: requestId) { return }
             }
             
-            self?.performGenericLyricsSearch(query: "\(artist) \(track)")
-        }.resume()
+            self.performGenericLyricsSearch(query: "\(artist) \(track)", requestId: requestId)
+        }
+        currentLyricDataTask?.resume()
     }
 
-    private func performGenericLyricsSearch(query: String) {
+    private func performGenericLyricsSearch(query: String, requestId: UUID) {
+        guard self.activeLyricTaskId == requestId else { return }
         var comp = URLComponents(string: "https://lrclib.net/api/search")
         comp?.queryItems = [
             URLQueryItem(name: "q", value: query)
         ]
         guard let url = comp?.url else {
-            DispatchQueue.main.async { self.isFetchingLyrics = false }
+            DispatchQueue.main.async {
+                if self.activeLyricTaskId == requestId { self.isFetchingLyrics = false }
+            }
             return
         }
         
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            defer { DispatchQueue.main.async { self?.isFetchingLyrics = false } }
-            guard let data = data,
+        currentLyricDataTask = urlSession.dataTask(with: url) { [weak self] data, response, _ in
+            guard let self = self, self.activeLyricTaskId == requestId else { return }
+            defer {
+                DispatchQueue.main.async {
+                    if self.activeLyricTaskId == requestId { self.isFetchingLyrics = false }
+                }
+            }
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+                  let data = data,
                   let results = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], !results.isEmpty else {
                 return
             }
@@ -486,7 +544,7 @@ class MusicController: ObservableObject {
                 if let s = $0["syncedLyrics"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
                 return false
             }) {
-                _ = self?.applyLyricsJSON(syncedResult)
+                _ = self.applyLyricsJSON(syncedResult, requestId: requestId)
                 return
             }
             
@@ -494,20 +552,24 @@ class MusicController: ObservableObject {
                 if let p = $0["plainLyrics"] as? String, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
                 return false
             }) {
-                _ = self?.applyLyricsJSON(plainResult)
+                _ = self.applyLyricsJSON(plainResult, requestId: requestId)
                 return
             }
-        }.resume()
+        }
+        currentLyricDataTask?.resume()
     }
 
     @discardableResult
-    private func applyLyricsJSON(_ json: [String: Any]) -> Bool {
+    private func applyLyricsJSON(_ json: [String: Any], requestId: UUID) -> Bool {
+        guard self.activeLyricTaskId == requestId else { return false }
         if let syncedLyrics = json["syncedLyrics"] as? String, !syncedLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let parsed = self.parseLRC(syncedLyrics)
             if !parsed.isEmpty {
                 DispatchQueue.main.async {
-                    self.lyrics = parsed
-                    self.isFetchingLyrics = false
+                    if self.activeLyricTaskId == requestId {
+                        self.lyrics = parsed
+                        self.isFetchingLyrics = false
+                    }
                 }
                 return true
             }
@@ -515,10 +577,12 @@ class MusicController: ObservableObject {
         
         if let plainLyrics = json["plainLyrics"] as? String, !plainLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let cleanPlain = plainLyrics.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-            let lines = cleanPlain.components(separatedBy: "\n").map { LyricLine(time: -1, text: $0) }
+            let lines = cleanPlain.components(separatedBy: "\n").prefix(2000).map { LyricLine(time: -1, text: $0) }
             DispatchQueue.main.async {
-                self.lyrics = lines
-                self.isFetchingLyrics = false
+                if self.activeLyricTaskId == requestId {
+                    self.lyrics = Array(lines)
+                    self.isFetchingLyrics = false
+                }
             }
             return true
         }
@@ -529,9 +593,11 @@ class MusicController: ObservableObject {
     private func parseLRC(_ lrc: String) -> [LyricLine] {
         var parsed: [LyricLine] = []
         let lines = lrc.components(separatedBy: .newlines)
+        let safeLineCount = min(lines.count, 2000)
         let regex = try? NSRegularExpression(pattern: "\\[(\\d+):(\\d+(?:\\.\\d+)?)\\](.*)")
         
-        for line in lines {
+        for i in 0..<safeLineCount {
+            let line = lines[i]
             let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
             if let match = regex?.firstMatch(in: line, options: [], range: nsRange) {
                 if let minRange = Range(match.range(at: 1), in: line),
@@ -540,14 +606,15 @@ class MusicController: ObservableObject {
                     
                     let min = Double(line[minRange]) ?? 0
                     let sec = Double(line[secRange]) ?? 0
-                    let rawText = String(line[textRange]).trimmingCharacters(in: .whitespaces)
+                    guard min < 600, sec < 60 else { continue }
                     
+                    let rawText = String(line[textRange]).trimmingCharacters(in: .whitespaces)
                     let text = rawText.isEmpty ? "•••" : rawText
                     parsed.append(LyricLine(time: (min * 60) + sec, text: text))
                 }
             }
         }
-        return parsed
+        return parsed.sorted(by: { $0.time < $1.time })
     }
     
     private func updateActiveLyric() {
@@ -586,6 +653,9 @@ class MusicController: ObservableObject {
     }
     
     private func fetchFallbackArtwork(track: String, artist: String) {
+        currentArtworkDataTask?.cancel()
+        currentArtworkDataTask = nil
+
         let cleanTrack = sanitizeTrackName(track)
         let cleanArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -606,8 +676,9 @@ class MusicController: ObservableObject {
             return
         }
         
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data, error == nil else {
+        currentArtworkDataTask = urlSession.dataTask(with: url) { [weak self] data, response, error in
+            guard let data = data, error == nil,
+                  let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
                 return
             }
@@ -642,7 +713,7 @@ class MusicController: ObservableObject {
                 let hdUrlString = finalUrl.replacingOccurrences(of: "100x100bb", with: "600x600bb")
                 guard let hdUrl = URL(string: hdUrlString) else { return }
                 
-                URLSession.shared.dataTask(with: hdUrl) { [weak self] imgData, _, _ in
+                self?.currentArtworkDataTask = self?.urlSession.dataTask(with: hdUrl) { [weak self] imgData, _, _ in
                     guard let imgData = imgData, let image = NSImage(data: imgData) else {
                         DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
                         return
@@ -655,14 +726,19 @@ class MusicController: ObservableObject {
                         self?.albumArt = compressed
                         self?.dominantColor = color
                     }
-                }.resume()
+                }
+                self?.currentArtworkDataTask?.resume()
             } else {
                 DispatchQueue.main.async { [weak self] in self?.albumArt = nil }
             }
-        }.resume()
+        }
+        currentArtworkDataTask?.resume()
     }
     
     func fetchArtwork() {
+        currentArtworkDataTask?.cancel()
+        currentArtworkDataTask = nil
+
         let appName = self.resolvedPlayer
         let currentTrack = self.trackName
         let currentArtist = self.artistName
@@ -702,7 +778,7 @@ class MusicController: ObservableObject {
                validUrlString.hasPrefix("https://"),
                let url = URL(string: validUrlString) {
                 
-                URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+                currentArtworkDataTask = urlSession.dataTask(with: url) { [weak self] data, response, error in
                     if let data = data, let image = NSImage(data: data) {
                         let compressed = self?.compressImage(image) ?? image
                         let color = AlbumColorExtractor.extract(from: compressed)
@@ -714,7 +790,8 @@ class MusicController: ObservableObject {
                     } else {
                         self?.fetchFallbackArtwork(track: currentTrack, artist: currentArtist)
                     }
-                }.resume()
+                }
+                currentArtworkDataTask?.resume()
             } else {
                 self.fetchFallbackArtwork(track: currentTrack, artist: currentArtist)
             }
@@ -769,7 +846,7 @@ class MusicController: ObservableObject {
             return
         }
         
-        queue.async { [weak self] in
+        metadataQueue.async { [weak self] in
             guard let self else { return }
             
             let src = """
@@ -806,12 +883,17 @@ class MusicController: ObservableObject {
     
     func playPlaylist(_ name: String) {
         let appName = self.resolvedPlayer
-        if appName == "Spotify" { return }
+        guard appName == "Music" else { return }
         
-        let safe = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        queue.async { [weak self] in
+        // Strict sanitization: strip newlines to prevent AppleScript statement injection
+        let safe = name
+            .filter { !$0.isNewline }
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        playbackQueue.async { [weak self] in
             guard let self else { return }
-            let src = "tell application \"\(appName)\" to play playlist \"\(safe)\""
+            let src = "tell application \"Music\" to play playlist \"\(safe)\""
             let success = self.runString(src) != nil
 
             DispatchQueue.main.async { [weak self] in
@@ -836,35 +918,42 @@ class MusicController: ObservableObject {
     func togglePlayPause() {
         let willPlay = !isPlaying
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         showPlaybackToast(message: willPlay ? "Playing" : "Paused", icon: willPlay ? "play.fill" : "pause.fill")
         
         DispatchQueue.main.async { [weak self] in self?.isPlaying = willPlay }
-        queue.async { [weak self] in self?.runString("tell application \"\(player)\" to playpause") }
+        playbackQueue.async { [weak self] in self?.runString("tell application \"\(player)\" to playpause") }
     }
 
     func previousTrack() {
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         showPlaybackToast(message: "Previous", icon: "backward.fill")
-        queue.async { [weak self] in self?.runString("tell application \"\(player)\" to back track") }
+        playbackQueue.async { [weak self] in self?.runString("tell application \"\(player)\" to back track") }
     }
 
     func nextTrack() {
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         showPlaybackToast(message: "Skipped", icon: "forward.fill")
-        queue.async { [weak self] in self?.runString("tell application \"\(player)\" to next track") }
+        playbackQueue.async { [weak self] in self?.runString("tell application \"\(player)\" to next track") }
     }
 
     func seek(to time: Double) {
+        guard time.isFinite, time >= 0 else { return }
+        let clampedTime = min(time, max(1.0, duration))
         let player = self.resolvedPlayer
-        queue.async { [weak self] in self?.runString("tell application \"\(player)\" to set player position to \(time)") }
+        guard player == "Music" || player == "Spotify" else { return }
+        playbackQueue.async { [weak self] in self?.runString("tell application \"\(player)\" to set player position to \(clampedTime)") }
     }
     
     func toggleShuffle() {
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         let newState = !isShuffleEnabled
         
         DispatchQueue.main.async { [weak self] in self?.isShuffleEnabled = newState }
-        queue.async { [weak self] in
+        playbackQueue.async { [weak self] in
             if player == "Music" {
                 self?.runString("tell application \"Music\" to set shuffle enabled to \(newState)")
             } else {
@@ -875,6 +964,7 @@ class MusicController: ObservableObject {
 
     func toggleRepeat() {
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         var nextState = "off"
         
         if player == "Music" {
@@ -883,14 +973,14 @@ class MusicController: ObservableObject {
             else { nextState = "off" }
             
             DispatchQueue.main.async { [weak self] in self?.repeatMode = nextState }
-            queue.async { [weak self] in
+            playbackQueue.async { [weak self] in
                 self?.runString("tell application \"Music\" to set song repeat to \(nextState)")
             }
         } else {
             nextState = repeatMode == "off" ? "all" : "off"
             let spotState = nextState == "all"
             DispatchQueue.main.async { [weak self] in self?.repeatMode = nextState }
-            queue.async { [weak self] in
+            playbackQueue.async { [weak self] in
                 self?.runString("tell application \"Spotify\" to set repeating to \(spotState)")
             }
         }
@@ -899,8 +989,12 @@ class MusicController: ObservableObject {
     // MARK: - Sleep Timer Engine
     
     func startSleepTimer(minutes: Int) {
+        guard minutes > 0, minutes <= 1440 else { return }
         sleepTimer?.invalidate()
-        sleepTimerRemaining = minutes * 60
+        let (totalSeconds, overflow) = minutes.multipliedReportingOverflow(by: 60)
+        guard !overflow else { return }
+        
+        sleepTimerRemaining = totalSeconds
         showPlaybackToast(message: "Sleep Timer: \(minutes)m", icon: "moon.zzz.fill")
         
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -977,8 +1071,10 @@ class MusicController: ObservableObject {
     }
 
     func setVolume(to value: Double) {
+        guard value.isFinite else { return }
         let clamped = max(0, min(100, value))
         let player = self.resolvedPlayer
+        guard player == "Music" || player == "Spotify" else { return }
         
         // 🔥 THE FIX: Robust edge-detection so haptic feedback fires exactly once
         if clamped == 0 || clamped == 100 {
@@ -998,7 +1094,7 @@ class MusicController: ObservableObject {
         let now = Date()
         if now.timeIntervalSince(lastVolumeSyncTime) > 0.1 {
             lastVolumeSyncTime = now
-            queue.async { [weak self] in
+            playbackQueue.async { [weak self] in
                 self?.runString("tell application \"\(player)\" to set sound volume to \(Int(clamped))")
             }
         }
@@ -1009,7 +1105,7 @@ class MusicController: ObservableObject {
             self?.runString("tell application \"\(player)\" to set sound volume to \(Int(clamped))")
         }
         pendingVolumeSync = task
-        queue.asyncAfter(deadline: .now() + 0.15, execute: task)
+        playbackQueue.asyncAfter(deadline: .now() + 0.15, execute: task)
     }
     
     func triggerVolumeHUD() {
