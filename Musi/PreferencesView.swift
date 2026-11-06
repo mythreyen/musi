@@ -68,7 +68,7 @@ struct PreferencesView: View {
                         Circle()
                             .fill(music.isPlaying ? Color.green : Color.white.opacity(0.3))
                             .frame(width: 7, height: 7)
-                        Text(music.isPlaying ? "Playing on \(music.targetPlayer)" : "Ready • \(music.targetPlayer)")
+                        Text(music.isPlaying ? "Playing on \(music.resolvedPlayer)" : "Ready • \(music.resolvedPlayer)")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.45))
                     }
@@ -134,7 +134,9 @@ struct SettingsHeaderView: View {
                 Spacer()
                 
                 Button {
-                    NSApp.keyWindow?.close()
+                    for window in NSApp.windows where window.title == "Musi Settings" {
+                        window.close()
+                    }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .bold))
@@ -214,7 +216,17 @@ struct GeneralSettingsTab: View {
         VStack(spacing: 18) {
             // Audio Source Card
             LiquidGlassSection(title: "MUSIC SERVICE", subtitle: "Select your active music streaming provider") {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    AudioServiceButton(
+                        serviceName: "Auto Detect",
+                        identifier: "Auto",
+                        icon: "sparkles",
+                        accentColor: .blue,
+                        isSelected: music.targetPlayer == "Auto"
+                    ) {
+                        music.targetPlayer = "Auto"
+                    }
+
                     AudioServiceButton(
                         serviceName: "Apple Music",
                         identifier: "Music",
@@ -430,24 +442,33 @@ struct AboutSettingsTab: View {
                         )
                         .frame(width: 100, height: 100)
                     
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.white.opacity(0.12))
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .strokeBorder(.white.opacity(0.3), lineWidth: 1.5)
-                        )
-                        .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 5)
-                    
-                    Image(systemName: "music.note")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.white, .white.opacity(0.8)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                    if let icon = NSApp.applicationIconImage {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 5)
+                    } else {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(.white.opacity(0.12))
+                            .frame(width: 72, height: 72)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .strokeBorder(.white.opacity(0.3), lineWidth: 1.5)
                             )
-                        )
+                            .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 5)
+                        
+                        Image(systemName: "music.note")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.white, .white.opacity(0.8)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
                 }
                 
                 Text("Musi")

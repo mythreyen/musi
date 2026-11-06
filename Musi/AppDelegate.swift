@@ -35,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             button.action = #selector(statusItemClicked(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.menu = buildStatusContextMenu()
         }
         
         menuBarAnimator = MenuBarAnimator(statusItem: statusItem, musicController: musicController)
@@ -55,6 +56,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Hotkey Setup
         HotKeyManager.shared.action = { [weak self] in self?.toggleMainPanel() }
         HotKeyManager.shared.registerSavedHotKey()
+
+        // Automatically present the main player panel on launch
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.showMainPanel(side: .center)
+        }
+
+        if CommandLine.arguments.contains("--settings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.openPreferences()
+            }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !panel.isVisible {
+            showMainPanel(side: .center)
+        } else {
+            openPreferences()
+        }
+        return true
     }
 
     // MARK: - Setup Observers & Monitors
@@ -573,7 +594,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApplication.shared.terminate(nil)
     }
 
-    func showStatusContextMenu() {
+    func buildStatusContextMenu() -> NSMenu {
         let menu = NSMenu()
 
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openPreferencesAction), keyEquivalent: ",")
@@ -614,7 +635,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(layoutItem)
 
         let sourceMenu = NSMenu()
-        for (label, val) in [("Apple Music", "Music"), ("Spotify", "Spotify")] {
+        for (label, val) in [("Auto Detect", "Auto"), ("Apple Music", "Music"), ("Spotify", "Spotify")] {
             let item = NSMenuItem(title: label, action: #selector(menuChangeSource(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = val
@@ -641,9 +662,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+        return menu
+    }
+
+    func showStatusContextMenu() {
+        let menu = buildStatusContextMenu()
+        statusItem.popUpMenu(menu)
     }
 
     func openPreferences() {
@@ -651,8 +675,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if preferencesController == nil {
             preferencesController = PreferencesWindowController(musicController: self.musicController)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            self.preferencesController?.showWindow(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let window = self.preferencesController?.window {
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                self.preferencesController?.showWindow(nil)
+            }
             NSApp.activate(ignoringOtherApps: true)
         }
     }

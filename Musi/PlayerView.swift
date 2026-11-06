@@ -260,6 +260,10 @@ struct MiniPlayerView: View {
                         Spacer(minLength: 0)
                         
                         HStack(spacing: 14) {
+                            MiniUtilityButton(icon: "gearshape.fill", isActive: false) {
+                                (NSApp.delegate as? AppDelegate)?.openPreferences()
+                            }
+                            
                             MiniUtilityButton(
                                 icon: music.sleepTimerRemaining != nil ? "moon.zzz.fill" : "moon.zzz",
                                 isActive: music.sleepTimerRemaining != nil
@@ -282,7 +286,7 @@ struct MiniPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1 : 0)
+                        .opacity(isHoveringIcons ? 1.0 : 0.65)
                         .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
@@ -364,6 +368,10 @@ struct CompactPlayerView: View {
                         Spacer(minLength: 0)
                         
                         HStack(spacing: 6) {
+                            CompactUtilityButton(icon: "gearshape.fill", isActive: false) {
+                                (NSApp.delegate as? AppDelegate)?.openPreferences()
+                            }
+
                             CompactUtilityButton(
                                 icon: music.sleepTimerRemaining != nil ? "moon.zzz.fill" : "moon.zzz",
                                 isActive: music.sleepTimerRemaining != nil
@@ -386,7 +394,7 @@ struct CompactPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1 : 0)
+                        .opacity(isHoveringIcons ? 1.0 : 0.65)
                         .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
@@ -453,18 +461,22 @@ struct LyricsWindowView: View {
                                 let opacity: Double = highlighted ? 1.0 : 0.25
                                 let blurRad: CGFloat = highlighted ? 0 : 2.5
                                 
-                                Text(line.text)
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.white)
-                                    .opacity(opacity)
-                                    .blur(radius: blurRad)
-                                    .scaleEffect(scale, anchor: .leading)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 24)
-                                    .id(index)
-                                    .onTapGesture {
-                                        if !isStatic { music.seek(to: line.time) }
-                                    }
+                                if line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                                    Spacer().frame(height: 14)
+                                } else {
+                                    Text(line.text)
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color.white)
+                                        .opacity(opacity)
+                                        .blur(radius: blurRad)
+                                        .scaleEffect(scale, anchor: .leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 24)
+                                        .id(index)
+                                        .onTapGesture {
+                                            if !isStatic { music.seek(to: line.time) }
+                                        }
+                                }
                             }
                             
                             Spacer().frame(height: 160)
@@ -521,6 +533,14 @@ struct LyricsHeaderBar: View {
             Spacer()
             HStack(spacing: 12) {
                 StandardUtilityButton(
+                    icon: "arrow.clockwise",
+                    isActive: music.isFetchingLyrics,
+                    helpText: "Reload Lyrics"
+                ) {
+                    music.fetchLyrics(track: music.trackName, artist: music.artistName, duration: music.duration)
+                }
+
+                StandardUtilityButton(
                     icon: music.isLyricsWindowLocked ? "lock.fill" : "lock.open",
                     isActive: music.isLyricsWindowLocked,
                     helpText: music.isLyricsWindowLocked ? "Unlock Lyrics Window" : "Lock Lyrics Window Position"
@@ -544,7 +564,7 @@ struct LyricsHeaderBar: View {
                     withAnimation(.easeInOut(duration: 0.3)) { music.showLyrics = false }
                 }
             }
-            .opacity(isHoveringIcons ? 1 : 0)
+            .opacity(isHoveringIcons ? 1.0 : 0.65)
             .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
@@ -651,7 +671,7 @@ struct HeaderBar: View {
                     withAnimation(.easeInOut(duration: 0.15)) { music.isPinned.toggle() }
                 }
                 
-                StandardUtilityButton(icon: closeHidesPanel ? "xmark" : "power", isActive: false, helpText: closeHidesPanel ? "Hide MusicBar" : "Quit MusicBar") {
+                StandardUtilityButton(icon: closeHidesPanel ? "xmark" : "power", isActive: false, helpText: closeHidesPanel ? "Hide Musi" : "Quit Musi") {
                     if closeHidesPanel {
                         (NSApp.delegate as? AppDelegate)?.hideMainPanel()
                     } else {
@@ -659,7 +679,7 @@ struct HeaderBar: View {
                     }
                 }
             }
-            .opacity(isHoveringIcons ? 1 : 0)
+            .opacity(isHoveringIcons ? 1.0 : 0.65)
             .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
@@ -787,7 +807,7 @@ struct PlayPlaylistButtonOnly: View {
     @EnvironmentObject var music: MusicController
     
     var body: some View {
-        let isSpotify = music.targetPlayer == "Spotify"
+        let isSpotify = music.resolvedPlayer == "Spotify"
         
         Button {
             music.playlistExpanded.toggle()
@@ -828,7 +848,7 @@ struct PlaylistListView: View {
     
     var body: some View {
         Group {
-            if music.targetPlayer == "Spotify" {
+            if music.resolvedPlayer == "Spotify" {
                 VStack(spacing: 12) {
                     ZStack {
                         Circle()

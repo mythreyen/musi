@@ -416,7 +416,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Musi/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MusicBar needs permission to control Apple Music to show track info and play playlists.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Musi needs permission to control and display music playback from Spotify and Apple Music.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -447,7 +447,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Musi/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MusicBar needs permission to control Apple Music to show track info and play playlists.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Musi needs permission to control and display music playback from Spotify and Apple Music.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
