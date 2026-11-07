@@ -224,7 +224,9 @@ struct GeneralSettingsTab: View {
                         accentColor: .blue,
                         isSelected: music.targetPlayer == "Auto"
                     ) {
-                        music.targetPlayer = "Auto"
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            music.targetPlayer = "Auto"
+                        }
                     }
 
                     AudioServiceButton(
@@ -234,7 +236,9 @@ struct GeneralSettingsTab: View {
                         accentColor: .pink,
                         isSelected: music.targetPlayer == "Music"
                     ) {
-                        music.targetPlayer = "Music"
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            music.targetPlayer = "Music"
+                        }
                     }
                     
                     AudioServiceButton(
@@ -244,7 +248,9 @@ struct GeneralSettingsTab: View {
                         accentColor: .green,
                         isSelected: music.targetPlayer == "Spotify"
                     ) {
-                        music.targetPlayer = "Spotify"
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            music.targetPlayer = "Spotify"
+                        }
                     }
                 }
                 .padding(14)
@@ -618,41 +624,49 @@ struct AudioServiceButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? accentColor.opacity(0.3) : .white.opacity(0.08))
-                        .frame(width: 36, height: 36)
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(isSelected ? accentColor.opacity(0.25) : .white.opacity(0.08))
+                            .frame(width: 38, height: 38)
+                        
+                        Image(systemName: icon)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(isSelected ? accentColor : .white.opacity(0.6))
+                    }
                     
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isSelected ? accentColor : .white.opacity(0.6))
+                    VStack(spacing: 2) {
+                        Text(serviceName)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        
+                        Text(isSelected ? "Active Provider" : "Available")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(isSelected ? accentColor : .white.opacity(0.4))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
                 }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(serviceName)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(isSelected ? .white : .white.opacity(0.8))
-                    Text(isSelected ? "Active Provider" : "Available")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(isSelected ? accentColor : .white.opacity(0.4))
-                }
-                
-                Spacer()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 6)
                 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundStyle(isSelected ? accentColor : .white.opacity(0.2))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? accentColor : .white.opacity(0.18))
+                    .padding(8)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(isSelected ? .white.opacity(0.12) : .white.opacity(0.03))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? accentColor.opacity(0.5) : .white.opacity(0.1), lineWidth: 1)
+                    .strokeBorder(isSelected ? accentColor.opacity(0.55) : .white.opacity(0.1), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
