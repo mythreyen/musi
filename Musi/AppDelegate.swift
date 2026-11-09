@@ -20,12 +20,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     private enum PanelSide { case left, right, center, topMiddle }
     private var currentPanelSide: PanelSide = .center
-    
-    // Multi-Directional Swipe detection variables
-    private var menuBarSwipeAccumulatorX: CGFloat = 0
-    private var menuBarSwipeAccumulatorY: CGFloat = 0
-    private var menuBarSwipeTimer: Timer?
-    private var lastSwipeActionTime: Date = Date.distantPast
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         musicController = MusicController()
@@ -50,7 +44,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         lyricsPanel.contentView = NSHostingView(rootView: LyricsWindowView().environmentObject(musicController))
 
         setupObservers()
-        setupMenuBarSwipeDetector()
         setupEventMonitors()
         
         // Hotkey Setup (Clean Carbon API registration, zero global keylogging)
@@ -179,88 +172,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self?.handleMediaHotkey(event) == true { return nil }
             return event
         }
-    }
-
-    // MARK: - Multi-Directional Swipe Detection
-    
-    private func setupMenuBarSwipeDetector() {
-        let handler: (NSEvent) -> Void = { [weak self] event in
-            guard let self = self else { return }
-            
-            // Kill momentum (don't react if finger is off glass)
-            if event.momentumPhase.rawValue != 0 {
-                self.menuBarSwipeAccumulatorX = 0
-                self.menuBarSwipeAccumulatorY = 0
-                return
-            }
-            if event.phase == .began {
-                self.menuBarSwipeAccumulatorX = 0
-                self.menuBarSwipeAccumulatorY = 0
-            }
-            
-            guard Date().timeIntervalSince(self.lastSwipeActionTime) > 0.4 else { return }
-            
-            let mouseLoc = NSEvent.mouseLocation
-            guard let screen = NSScreen.screens.first(where: { $0.frame.insetBy(dx: -1, dy: -1).contains(mouseLoc) }) else { return }
-            
-            // Only trigger if hovering top menu bar
-            if (screen.frame.maxY - mouseLoc.y) <= 40 {
-                let deltaX = event.scrollingDeltaX
-                let deltaY = event.scrollingDeltaY
-                
-                if abs(deltaX) > 2 { self.menuBarSwipeAccumulatorX += deltaX }
-                if abs(deltaY) > 2 { self.menuBarSwipeAccumulatorY += deltaY }
-                
-                if abs(deltaX) > 2 || abs(deltaY) > 2 {
-                    self.menuBarSwipeTimer?.invalidate()
-                    self.menuBarSwipeTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { [weak self] _ in
-                        self?.menuBarSwipeAccumulatorX = 0
-                        self?.menuBarSwipeAccumulatorY = 0
-                    }
-                    
-                    let dirMult: CGFloat = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
-                    let physX = self.menuBarSwipeAccumulatorX * dirMult
-                    let physY = self.menuBarSwipeAccumulatorY * dirMult
-                    let threshold: CGFloat = 40.0
-                    
-                    // Determine dominant swipe direction (Horizontal vs Vertical)
-                    if abs(physX) > abs(physY) {
-                        // 👉 Horizontal Swipe
-                        if physX > threshold { // Swipe Right -> Open Left or Close Right
-                            if !self.panel.isVisible { self.showMainPanel(side: .left) }
-                            else if self.currentPanelSide == .right { self.hideMainPanel() }
-                            self.resetSwipeState()
-                        } else if physX < -threshold { // Swipe Left -> Open Right or Close Left
-                            if !self.panel.isVisible { self.showMainPanel(side: .right) }
-                            else if self.currentPanelSide == .left { self.hideMainPanel() }
-                            self.resetSwipeState()
-                        }
-                    } else {
-                        // 👇 Vertical Swipe
-                        if physY > threshold { // Swipe Down -> Drop Compact View
-                            if !self.panel.isVisible {
-                                self.musicController.playerStyle = .compact
-                                self.showMainPanel(side: .topMiddle)
-                            }
-                            self.resetSwipeState()
-                        } else if physY < -threshold { // Swipe Up -> Push back to Menu Bar
-                            if self.panel.isVisible {
-                                self.hideMainPanel()
-                            }
-                            self.resetSwipeState()
-                        }
-                    }
-                }
-            }
-        }
-        NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel, handler: handler)
-        NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { handler($0); return $0 }
-    }
-    
-    private func resetSwipeState() {
-        self.lastSwipeActionTime = Date()
-        self.menuBarSwipeAccumulatorX = 0
-        self.menuBarSwipeAccumulatorY = 0
     }
 
     // MARK: - Animation Engine
