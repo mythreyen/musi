@@ -431,6 +431,7 @@ struct CompactPlayerView: View {
 
 struct LyricsWindowView: View {
     @EnvironmentObject var music: MusicController
+    @State private var isHovering = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -508,8 +509,10 @@ struct LyricsWindowView: View {
                 }
             }
             
-            LyricsHeaderBar()
+            LyricsHeaderBar(isHovered: isHovering)
         }
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
@@ -526,9 +529,12 @@ struct LyricsWindowView: View {
 
 struct LyricsHeaderBar: View {
     @EnvironmentObject var music: MusicController
+    var isHovered: Bool = false
     @State private var isHoveringIcons = false
 
     var body: some View {
+        let showButtons = isHovered || isHoveringIcons
+
         HStack {
             Spacer()
             HStack(spacing: 12) {
@@ -564,8 +570,9 @@ struct LyricsHeaderBar: View {
                     withAnimation(.easeInOut(duration: 0.3)) { music.showLyrics = false }
                 }
             }
-            .opacity(isHoveringIcons ? 1.0 : 0.65)
-            .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
+            .opacity(showButtons ? 1.0 : 0.0)
+            .allowsHitTesting(showButtons)
+            .animation(.easeInOut(duration: 0.2), value: showButtons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
             .onHover { isHoveringIcons = $0 }
