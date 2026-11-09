@@ -385,29 +385,21 @@ struct ShortcutsSettingsTab: View {
                 )
             }
             
-            // Multi-Directional Gestures Guide
-            LiquidGlassSection(title: "MENU BAR TRACKPAD GESTURES") {
+            // Player Gestures Guide
+            LiquidGlassSection(title: "PLAYER TRACKPAD GESTURES") {
                 VStack(alignment: .leading, spacing: 12) {
                     GestureGuideRow(
                         icon: "arrow.left.and.right",
-                        title: "Horizontal Swipe on Status Icon",
-                        description: "Swipe left or right over the menu bar to jump between tracks."
+                        title: "Swipe on Player Artwork",
+                        description: "Swipe left or right across the album art to skip or replay tracks."
                     )
                     
                     Divider().overlay(.white.opacity(0.08))
                     
                     GestureGuideRow(
-                        icon: "arrow.down",
-                        title: "Swipe Down from Menu Bar",
-                        description: "Smoothly drops down the compact now-playing controller."
-                    )
-                    
-                    Divider().overlay(.white.opacity(0.08))
-                    
-                    GestureGuideRow(
-                        icon: "arrow.up",
-                        title: "Swipe Up towards Menu Bar",
-                        description: "Instantly tucks away the active player panel."
+                        icon: "speaker.wave.2.fill",
+                        title: "Vertical Scroll on Player",
+                        description: "Scroll two fingers up or down anywhere on the player to adjust volume."
                     )
                 }
                 .padding(14)
