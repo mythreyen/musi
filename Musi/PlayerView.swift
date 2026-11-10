@@ -133,7 +133,7 @@ struct StandardPlayerView: View {
                 removal: .move(edge: music.isPlaying ? .leading : .trailing).combined(with: .opacity)
             ))
             .animation(.easeInOut(duration: 0.6), value: music.albumArt)
-            .frame(width: 360, height: music.playlistExpanded ? 732 : 570, alignment: .top)
+            .frame(width: 360, height: music.playlistExpanded ? 735 : 570, alignment: .top)
             .animation(.timingCurve(0.16, 1.0, 0.3, 1.0, duration: 0.5), value: music.playlistExpanded)
             .clipped()
             .overlay(
@@ -195,7 +195,7 @@ struct StandardPlayerView: View {
             .animation(.timingCurve(0.16, 1.0, 0.3, 1.0, duration: 0.5), value: music.playlistExpanded)
             
         }
-        .frame(width: 360, height: music.playlistExpanded ? 732 : 570, alignment: .top)
+        .frame(width: 360, height: music.playlistExpanded ? 735 : 570, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
