@@ -594,16 +594,17 @@ struct StandardUtilityButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: icon == "power" || icon == "xmark" ? .bold : .medium))
-                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.6))
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(isActive ? Color.white.opacity(0.25) : Color.black.opacity(0.2)))
-                .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
-        }
-        .buttonStyle(.plain)
-        .help(helpText)
+        LiquidGlassCircleButton(
+            icon: icon,
+            size: 26,
+            iconSize: 12,
+            weight: icon == "power" || icon == "xmark" ? .bold : .medium,
+            isActive: isActive,
+            activeTint: .purple,
+            isMain: false,
+            helpText: helpText,
+            action: action
+        )
     }
 }
 
@@ -613,12 +614,17 @@ struct MiniUtilityButton: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.8))
-                .shadow(color: Color.black.opacity(0.4), radius: 2, x: 0, y: 1)
-        }
-        .buttonStyle(.plain)
+        LiquidGlassCircleButton(
+            icon: icon,
+            size: 24,
+            iconSize: 11,
+            weight: icon == "power" || icon == "xmark" ? .bold : .medium,
+            isActive: isActive,
+            activeTint: .purple,
+            isMain: false,
+            helpText: nil,
+            action: action
+        )
     }
 }
 
@@ -628,14 +634,17 @@ struct CompactUtilityButton: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: icon == "power" || icon == "xmark" ? .bold : .semibold))
-                .padding(8)
-                .background(Circle().fill(Color.white.opacity(isActive ? 0.4 : 0.2)))
-                .foregroundStyle(Color.white)
-        }
-        .buttonStyle(.plain)
+        LiquidGlassCircleButton(
+            icon: icon,
+            size: 26,
+            iconSize: 12,
+            weight: icon == "power" || icon == "xmark" ? .bold : .semibold,
+            isActive: isActive,
+            activeTint: .purple,
+            isMain: false,
+            helpText: nil,
+            action: action
+        )
     }
 }
 
@@ -751,35 +760,62 @@ struct TransportControls: View {
     
     var body: some View {
         let isStandard = music.playerStyle == .standard
-        let spacing: CGFloat = isStandard ? 24 : 12
-        let shufRepWidth: CGFloat = isStandard ? 24 : 18
-        let shufRepSize: CGFloat = isStandard ? 15 : 13
+        let spacing: CGFloat = isStandard ? 20 : 10
+        let shufRepSize: CGFloat = isStandard ? 14 : 12
+        let circleSize: CGFloat = isStandard ? 30 : 26
         
         HStack(spacing: spacing) {
             
             // Shuffle
-            Button { music.toggleShuffle() } label: {
-                Image(systemName: "shuffle")
-                    .font(.system(size: shufRepSize, weight: .semibold))
-                    .foregroundStyle(.white.opacity(music.isShuffleEnabled ? 1.0 : 0.35))
-                    .shadow(color: music.isShuffleEnabled ? .white.opacity(0.3) : .clear, radius: 4, x: 0, y: 0)
+            LiquidGlassCircleButton(
+                icon: "shuffle",
+                size: circleSize,
+                iconSize: shufRepSize,
+                weight: .semibold,
+                isActive: music.isShuffleEnabled,
+                activeTint: .purple,
+                helpText: "Shuffle"
+            ) {
+                music.toggleShuffle()
             }
-            .buttonStyle(.plain)
-            .frame(width: shufRepWidth)
             
-            TransportButton(icon: "backward.fill", size: isStandard ? 20 : 16, circleSize: isStandard ? 44 : 36) { music.previousTrack() }
-            TransportButton(icon: music.isPlaying ? "pause.fill" : "play.fill", size: isStandard ? 26 : 22, circleSize: isStandard ? 58 : 46, isMain: true) { music.togglePlayPause() }
-            TransportButton(icon: "forward.fill", size: isStandard ? 20 : 16, circleSize: isStandard ? 44 : 36) { music.nextTrack() }
+            TransportButton(
+                icon: "backward.fill",
+                size: isStandard ? 20 : 16,
+                circleSize: isStandard ? 44 : 36
+            ) {
+                music.previousTrack()
+            }
+            
+            TransportButton(
+                icon: music.isPlaying ? "pause.fill" : "play.fill",
+                size: isStandard ? 26 : 22,
+                circleSize: isStandard ? 58 : 46,
+                isMain: true
+            ) {
+                music.togglePlayPause()
+            }
+            
+            TransportButton(
+                icon: "forward.fill",
+                size: isStandard ? 20 : 16,
+                circleSize: isStandard ? 44 : 36
+            ) {
+                music.nextTrack()
+            }
             
             // Repeat
-            Button { music.toggleRepeat() } label: {
-                Image(systemName: music.repeatMode == "one" ? "repeat.1" : "repeat")
-                    .font(.system(size: shufRepSize, weight: .semibold))
-                    .foregroundStyle(.white.opacity(music.repeatMode != "off" ? 1.0 : 0.35))
-                    .shadow(color: music.repeatMode != "off" ? .white.opacity(0.3) : .clear, radius: 4, x: 0, y: 0)
+            LiquidGlassCircleButton(
+                icon: music.repeatMode == "one" ? "repeat.1" : "repeat",
+                size: circleSize,
+                iconSize: shufRepSize,
+                weight: .semibold,
+                isActive: music.repeatMode != "off",
+                activeTint: .purple,
+                helpText: "Repeat: \(music.repeatMode.capitalized)"
+            ) {
+                music.toggleRepeat()
             }
-            .buttonStyle(.plain)
-            .frame(width: shufRepWidth)
         }
     }
 }
@@ -790,24 +826,39 @@ struct TransportButton: View {
     let circleSize: CGFloat
     var isMain: Bool = false
     let action: () -> Void
+    
+    @State private var isHovered = false
     @State private var pressed = false
     
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle()
-                    .fill(.white.opacity(isMain ? 0.22 : 0.12))
-                    .frame(width: circleSize, height: circleSize)
+                LiquidGlassCircleBackground(
+                    isActive: isMain,
+                    isHovered: isHovered,
+                    isPressed: pressed,
+                    isMain: isMain,
+                    tint: nil
+                )
                 
                 Image(systemName: icon)
-                    .font(.system(size: size, weight: .semibold))
+                    .font(.system(size: size, weight: .bold))
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
             }
-            .scaleEffect(pressed ? 0.92 : 1.0)
+            .frame(width: circleSize, height: circleSize)
+            .scaleEffect(pressed ? 0.92 : (isHovered ? 1.05 : 1.0))
+            .animation(.spring(response: 0.24, dampingFraction: 0.65), value: pressed)
+            .animation(.spring(response: 0.26, dampingFraction: 0.75), value: isHovered)
         }
-        .buttonStyle(.plain).contentShape(Circle())
-        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in withAnimation(.easeInOut(duration: 0.08)) { pressed = true } }.onEnded { _ in withAnimation(.easeInOut(duration: 0.12)) { pressed = false } })
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in pressed = true }
+                .onEnded { _ in pressed = false }
+        )
     }
 }
 
@@ -817,6 +868,8 @@ struct TransportButton: View {
 
 struct PlayPlaylistButtonOnly: View {
     @EnvironmentObject var music: MusicController
+    @State private var isHovered = false
+    @State private var isPressed = false
     
     var body: some View {
         let isSpotify = music.resolvedPlayer == "Spotify"
@@ -847,11 +900,20 @@ struct PlayPlaylistButtonOnly: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity)
-            .background(GlassPill())
+            .background(GlassPill(isHovered: isHovered, isPressed: isPressed))
             .clipShape(Capsule())
             .contentShape(Capsule())
+            .scaleEffect(isPressed ? 0.96 : (isHovered ? 1.02 : 1.0))
+            .animation(.spring(response: 0.24, dampingFraction: 0.65), value: isPressed)
+            .animation(.spring(response: 0.26, dampingFraction: 0.75), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -963,35 +1025,22 @@ struct ToastView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
+            LiquidGlassCapsuleBackground(isActive: false, isHovered: false, isPressed: false, tint: nil)
         )
     }
 }
 
 struct GlassPill: View {
+    var isHovered: Bool = false
+    var isPressed: Bool = false
+    
     var body: some View {
-        Capsule()
-            .fill(.ultraThinMaterial)
-            .environment(\.colorScheme, .dark)
-            .overlay(
-                Capsule()
-                    .fill(LinearGradient(colors: [.white.opacity(0.15), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            )
-            .overlay(
-                VStack {
-                    LinearGradient(colors: [.white.opacity(0.2), .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 12)
-                        .clipShape(Capsule())
-                    Spacer()
-                }
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-            )
+        LiquidGlassCapsuleBackground(
+            isActive: false,
+            isHovered: isHovered,
+            isPressed: isPressed,
+            tint: nil
+        )
     }
 }
 
