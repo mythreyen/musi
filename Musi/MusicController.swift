@@ -172,7 +172,7 @@ class MusicController: ObservableObject {
 
     init() {
         setupObservers()
-        startScrubberTimer()
+        updatePlaybackTimers(playing: false)
         pollState()
         refreshPlaylists()
     }
@@ -214,6 +214,11 @@ class MusicController: ObservableObject {
         pollState()
     }
     
+    private func updatePlaybackTimers(playing: Bool) {
+        updateSyncTimer(playing: playing)
+        updateScrubberTimer(playing: playing)
+    }
+
     private func updateSyncTimer(playing: Bool) {
         syncTimer?.invalidate()
         // Adaptive polling: 2s when active to stay responsive, 8s when paused to save battery
@@ -224,7 +229,12 @@ class MusicController: ObservableObject {
         RunLoop.main.add(syncTimer!, forMode: .common)
     }
 
-    private func startScrubberTimer() {
+    private func updateScrubberTimer(playing: Bool) {
+        scrubberTimer?.invalidate()
+        scrubberTimer = nil
+        
+        guard playing else { return }
+        
         scrubberTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if self.isPlaying && !self.isScrubbing {
@@ -235,7 +245,6 @@ class MusicController: ObservableObject {
             }
         }
         RunLoop.main.add(scrubberTimer!, forMode: .common)
-        updateSyncTimer(playing: false)
     }
 
     private func pollState() {
@@ -328,7 +337,7 @@ class MusicController: ObservableObject {
                 guard let self else { return }
                 
                 if self.isPlaying != playing {
-                    self.updateSyncTimer(playing: playing)
+                    self.updatePlaybackTimers(playing: playing)
                 }
                 
                 self.isMusicRunning   = running
@@ -921,7 +930,11 @@ class MusicController: ObservableObject {
         guard player == "Music" || player == "Spotify" else { return }
         showPlaybackToast(message: willPlay ? "Playing" : "Paused", icon: willPlay ? "play.fill" : "pause.fill")
         
-        DispatchQueue.main.async { [weak self] in self?.isPlaying = willPlay }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isPlaying = willPlay
+            self.updatePlaybackTimers(playing: willPlay)
+        }
         playbackQueue.async { [weak self] in self?.runString("tell application \"\(player)\" to playpause") }
     }
 
