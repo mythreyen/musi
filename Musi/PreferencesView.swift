@@ -75,7 +75,7 @@ struct PreferencesView: View {
                     
                     Spacer()
                     
-                    Text("Musi v1.0.0")
+                    Text("Musi v\(Bundle.main.appVersion)")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.35))
                 }
@@ -473,7 +473,7 @@ struct AboutSettingsTab: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 
-                Text("Version 1.0.0 (Build 1)")
+                Text("Version \(Bundle.main.appVersion) (Build \(Bundle.main.appBuild))")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.5))
                 
@@ -1017,5 +1017,14 @@ struct SettingsLiquidGlassBackground: View {
                 )
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+}
+
+private extension Bundle {
+    var appVersion: String {
+        infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+    var appBuild: String {
+        infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 }
