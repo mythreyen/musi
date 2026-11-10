@@ -14,6 +14,7 @@ class PreferencesWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
         
         window.backgroundColor = .clear
         window.isOpaque = false
