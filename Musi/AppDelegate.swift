@@ -363,7 +363,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
         
-        let targetY = mainFrame.maxY - lHeight
+        var targetY = mainFrame.maxY - lHeight
+        targetY = max(screen.visibleFrame.minY + 4, min(targetY, screen.visibleFrame.maxY - lHeight - 4))
+        targetX = max(screen.visibleFrame.minX + 8, min(targetX, screen.visibleFrame.maxX - lWidth - 8))
         return (NSRect(x: targetX, y: targetY, width: lWidth, height: lHeight), expectedSide)
     }
     
