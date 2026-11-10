@@ -497,13 +497,18 @@ struct LyricsWindowView: View {
                     .animation(.spring(response: 0.5, dampingFraction: 0.75, blendDuration: 0), value: music.activeLyricIndex)
                 }
                 .onChange(of: music.activeLyricIndex) { newIndex in
-                    guard let index = newIndex else { return }
-                    withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
-                        proxy.scrollTo(index, anchor: .center)
+                    if let index = newIndex, index >= 0 {
+                        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+                            proxy.scrollTo(index, anchor: .center)
+                        }
+                    } else if let lyrics = music.lyrics, !lyrics.isEmpty {
+                        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+                            proxy.scrollTo(0, anchor: .center)
+                        }
                     }
                 }
                 .onAppear {
-                    if let index = music.activeLyricIndex {
+                    if let index = music.activeLyricIndex, index >= 0 {
                         proxy.scrollTo(index, anchor: .center)
                     }
                 }
