@@ -267,9 +267,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func hideMainPanel() {
         musicController.playlistExpanded = false
-        if musicController.isLyricsPinned {
+        
+        if panel.childWindows?.contains(lyricsPanel) == true {
             panel.removeChildWindow(lyricsPanel)
         }
+        
+        if lyricsPanel.isVisible {
+            if musicController.isLyricsPinned {
+                // If lyrics are pinned to desktop, keep them open as a standalone window
+                // and unlink magnetic docking since the main music window is closing.
+                if musicController.isLyricsMagnetic {
+                    musicController.isLyricsMagnetic = false
+                }
+            } else {
+                // If lyrics are not pinned to desktop, close them along with the main music window
+                if musicController.isLyricsMagnetic {
+                    musicController.isLyricsMagnetic = false
+                }
+                musicController.showLyrics = false
+            }
+        } else if musicController.isLyricsMagnetic {
+            musicController.isLyricsMagnetic = false
+        }
+        
         var endFrame = panel.frame
         
         switch currentPanelSide {
