@@ -29,7 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             button.action = #selector(statusItemClicked(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.menu = buildStatusContextMenu()
         }
         
         menuBarAnimator = MenuBarAnimator(statusItem: statusItem, musicController: musicController)
@@ -156,8 +155,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             
             let clickedMain = self.panel.isVisible && self.panel.frame.contains(mouseLoc)
             let clickedLyrics = self.lyricsPanel.isVisible && self.lyricsPanel.frame.contains(mouseLoc)
+            let clickedButton = self.statusItem.button?.window?.frame.contains(mouseLoc) ?? false
             
-            if clickedMain || clickedLyrics { return }
+            if clickedMain || clickedLyrics || clickedButton { return }
             
             if self.panel.isVisible && !self.musicController.isPinned {
                 self.hideMainPanel()
