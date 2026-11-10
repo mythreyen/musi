@@ -626,10 +626,10 @@ class MusicController: ObservableObject {
             if activeLyricIndex != index {
                 activeLyricIndex = index
             }
-        } else if lyrics.first?.time == -1 {
-            activeLyricIndex = nil
         } else {
-            activeLyricIndex = -1
+            if activeLyricIndex != nil {
+                activeLyricIndex = nil
+            }
         }
     }
 
