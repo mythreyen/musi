@@ -600,7 +600,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func openPreferences() {
         hideMainPanel()
-        if preferencesController == nil {
+        if preferencesController == nil || preferencesController?.window == nil {
             preferencesController = PreferencesWindowController(musicController: self.musicController)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
