@@ -383,7 +383,7 @@ struct CompactPlayerView: View {
                                 withAnimation(.easeInOut(duration: 0.3)) { music.showLyrics.toggle() }
                             }
                             
-                            CompactUtilityButton(icon: music.isPinned ? "pin.fill" : "pin", isActive: false) {
+                            CompactUtilityButton(icon: music.isPinned ? "pin.fill" : "pin", isActive: music.isPinned) {
                                 withAnimation { music.isPinned.toggle() }
                             }
                             CompactUtilityButton(icon: closeHidesPanel ? "xmark" : "power", isActive: false) {
