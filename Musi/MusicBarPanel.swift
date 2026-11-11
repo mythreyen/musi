@@ -16,6 +16,7 @@ class MusicBarPanel: NSPanel {
         
         isMovable                   = true
         isMovableByWindowBackground = true
+        acceptsMouseMovedEvents     = true
         
         // Prevents macOS from automatically hiding the window when it loses focus
         hidesOnDeactivate           = false
