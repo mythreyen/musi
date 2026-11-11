@@ -133,62 +133,32 @@ struct SettingsHeaderView: View {
                 
                 Spacer()
                 
-                Button {
+                LiquidGlassCircleButton(
+                    icon: "xmark",
+                    size: 28,
+                    iconSize: 12,
+                    weight: .bold,
+                    isActive: false,
+                    helpText: "Close Settings"
+                ) {
                     for window in NSApp.windows where window.title == "Musi Settings" {
                         window.close()
                     }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .fill(.white.opacity(0.1))
-                        )
-                        .overlay(
-                            Circle()
-                                .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-                        )
                 }
-                .buttonStyle(.plain)
             }
             
             // Liquid Glass Segmented Tab Bar
             HStack(spacing: 6) {
                 ForEach(SettingsTab.allCases) { tab in
-                    let isSelected = selectedTab == tab
-                    Button {
+                    SettingsTabButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        tabAnimation: tabAnimation
+                    ) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                             selectedTab = tab
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: tab.iconName)
-                                .font(.system(size: 12, weight: .medium))
-                            Text(tab.rawValue)
-                                .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
-                        }
-                        .foregroundStyle(isSelected ? .white : .white.opacity(0.55))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            ZStack {
-                                if isSelected {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(.white.opacity(0.18))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .strokeBorder(.white.opacity(0.3), lineWidth: 1)
-                                        )
-                                        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                        .matchedGeometryEffect(id: "activeTabBadge", in: tabAnimation)
-                                }
-                            }
-                        )
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(4)
@@ -201,6 +171,51 @@ struct SettingsHeaderView: View {
                     .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
             )
         }
+    }
+}
+
+struct SettingsTabButton: View {
+    let tab: SettingsTab
+    let isSelected: Bool
+    var tabAnimation: Namespace.ID
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: tab.iconName)
+                    .font(.system(size: 12, weight: .medium))
+                Text(tab.rawValue)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
+            }
+            .foregroundStyle(isSelected ? .white : (isHovered ? .white.opacity(0.85) : .white.opacity(0.55)))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                ZStack {
+                    if isSelected {
+                        LiquidGlassCardBackground(cornerRadius: 10, isActive: true, isHovered: isHovered, isPressed: isPressed, tint: .purple)
+                            .matchedGeometryEffect(id: "activeTabBadge", in: tabAnimation)
+                    } else if isHovered {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                    }
+                }
+            )
+            .contentShape(Rectangle())
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.24, dampingFraction: 0.65), value: isPressed)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -499,20 +514,15 @@ struct AboutSettingsTab: View {
                         
                         Spacer()
                         
-                        Button {
+                        LiquidGlassPillButton(action: {
                             if let url = URL(string: "https://github.com/mythreyen") {
                                 NSWorkspace.shared.open(url)
                             }
-                        } label: {
+                        }) {
                             Text("GitHub Profile")
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(.white.opacity(0.12)))
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
                                 .foregroundStyle(.white)
                         }
-                        .buttonStyle(.plain)
                     }
                     
                     Divider().overlay(.white.opacity(0.08))
@@ -529,23 +539,18 @@ struct AboutSettingsTab: View {
                         
                         Spacer()
                         
-                        Button {
+                        LiquidGlassPillButton(action: {
                             if let url = URL(string: "https://github.com/mythreyen/musi") {
                                 NSWorkspace.shared.open(url)
                             }
-                        } label: {
+                        }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.up.right.square")
                                 Text("View Repo")
                             }
                             .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(.white.opacity(0.12)))
-                            .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
                             .foregroundStyle(.white)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(14)
@@ -613,6 +618,9 @@ struct AudioServiceButton: View {
     let accentColor: Color
     let isSelected: Bool
     let action: () -> Void
+    
+    @State private var isHovered = false
+    @State private var isPressed = false
 
     var body: some View {
         Button(action: action) {
@@ -620,12 +628,12 @@ struct AudioServiceButton: View {
                 VStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(isSelected ? accentColor.opacity(0.25) : .white.opacity(0.08))
+                            .fill(isSelected ? accentColor.opacity(0.3) : .white.opacity(0.08))
                             .frame(width: 38, height: 38)
                         
                         Image(systemName: icon)
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(isSelected ? accentColor : .white.opacity(0.6))
+                            .foregroundStyle(isSelected ? accentColor : .white.opacity(0.7))
                     }
                     
                     VStack(spacing: 2) {
@@ -653,15 +661,25 @@ struct AudioServiceButton: View {
             }
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? .white.opacity(0.12) : .white.opacity(0.03))
+                LiquidGlassCardBackground(
+                    cornerRadius: 14,
+                    isActive: isSelected,
+                    isHovered: isHovered,
+                    isPressed: isPressed,
+                    tint: isSelected ? accentColor : nil
+                )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? accentColor.opacity(0.55) : .white.opacity(0.1), lineWidth: 1)
-            )
+            .scaleEffect(isPressed ? 0.97 : (isHovered ? 1.02 : 1.0))
+            .animation(.spring(response: 0.24, dampingFraction: 0.65), value: isPressed)
+            .animation(.spring(response: 0.26, dampingFraction: 0.75), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -669,6 +687,9 @@ struct LayoutOptionCard: View {
     let style: PlayerStyle
     let isSelected: Bool
     let action: () -> Void
+    
+    @State private var isHovered = false
+    @State private var isPressed = false
 
     var body: some View {
         Button(action: action) {
@@ -694,15 +715,25 @@ struct LayoutOptionCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? .white.opacity(0.14) : .white.opacity(0.03))
+                LiquidGlassCardBackground(
+                    cornerRadius: 14,
+                    isActive: isSelected,
+                    isHovered: isHovered,
+                    isPressed: isPressed,
+                    tint: isSelected ? .purple : nil
+                )
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isSelected ? .white.opacity(0.45) : .white.opacity(0.08), lineWidth: 1)
-            )
+            .scaleEffect(isPressed ? 0.97 : (isHovered ? 1.02 : 1.0))
+            .animation(.spring(response: 0.24, dampingFraction: 0.65), value: isPressed)
+            .animation(.spring(response: 0.26, dampingFraction: 0.75), value: isHovered)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -863,6 +894,8 @@ struct GlassHotKeyRecorderRow: View {
     let subtitle: String
     
     @State private var isRecording = false
+    @State private var isHovered = false
+    @State private var isPressed = false
     @AppStorage("hotkeyCode") private var hotkeyCode = kVK_ANSI_M
     @AppStorage("hotkeyModifiers") private var hotkeyModifiers = (cmdKey | shiftKey)
     
@@ -901,16 +934,26 @@ struct GlassHotKeyRecorderRow: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isRecording ? Color.red.opacity(0.3) : Color.white.opacity(0.12))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(isRecording ? Color.red.opacity(0.5) : Color.white.opacity(0.25), lineWidth: 1)
+                        LiquidGlassCardBackground(
+                            cornerRadius: 8,
+                            isActive: isRecording,
+                            isHovered: isHovered,
+                            isPressed: isPressed,
+                            tint: isRecording ? Color.red : Color.purple
+                        )
                     )
                     .foregroundStyle(isRecording ? .red : .white)
+                    .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.03 : 1.0))
+                    .animation(.spring(response: 0.24, dampingFraction: 0.65), value: isPressed)
+                    .animation(.spring(response: 0.26, dampingFraction: 0.75), value: isHovered)
             }
             .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded { _ in isPressed = false }
+            )
             .background(KeyEventResponder(isRecording: $isRecording, onRecord: { code, mods in
                 self.hotkeyCode = code
                 self.hotkeyModifiers = mods
