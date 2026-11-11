@@ -1,5 +1,4 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
+# This workflow builds and runs unit tests for the Musi macOS application.
 
 name: Swift
 
@@ -11,12 +10,47 @@ on:
 
 jobs:
   build:
-
-    runs-on: macos-latest
+    name: Build & Test
+    runs-on: macos-15
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: |
+          echo "Installed Xcode versions:"
+          ls -d /Applications/Xcode* 2>/dev/null || true
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
+          fi
+          xcodebuild -version
+
+      - name: Build Musi (Release)
+        run: |
+          xcodebuild clean build \
+            -project Musi.xcodeproj \
+            -scheme Musi \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath ./build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run Unit Tests (Debug)
+        run: |
+          xcodebuild test \
+            -project Musi.xcodeproj \
+            -scheme Musi \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath ./build/DerivedData \
+            -only-testing:MusiTests \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
