@@ -113,8 +113,17 @@ extension AnyTransition {
 
 struct StandardPlayerView: View {
     @EnvironmentObject var music: MusicController
+    @State private var isHoveringApp = false
+    @State private var cursorLocation: CGPoint? = nil
+    @State private var isHoveringHeader = false
+    @State private var isHoveringTransport = false
+    @State private var isHoveringPlaylist = false
 
     var body: some View {
+        let isHeaderVisible = isHoveringApp && ((cursorLocation.map { $0.y < 95 } ?? false) || isHoveringHeader)
+        let isTransportVisible = isHoveringApp && ((cursorLocation.map { $0.y >= 300 && $0.y <= 515 } ?? false) || isHoveringTransport)
+        let isPlaylistVisible = music.playlistExpanded || (isHoveringApp && ((cursorLocation.map { $0.y > 470 } ?? false) || isHoveringPlaylist))
+
         ZStack(alignment: .top) {
             
             ZStack {
@@ -163,7 +172,8 @@ struct StandardPlayerView: View {
             .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                HeaderBar()
+                HeaderBar(isVisible: isHeaderVisible)
+                    .onHover { isHoveringHeader = $0 }
                 Spacer()
                 
                 StandardTrackInfoView()
@@ -174,11 +184,21 @@ struct StandardPlayerView: View {
                 
                 if music.showPlaybackControls {
                     TransportControls()
+                        .opacity(isTransportVisible ? 1.0 : 0.0)
+                        .scaleEffect(isTransportVisible ? 1.0 : 0.94)
+                        .allowsHitTesting(isTransportVisible)
+                        .animation(.easeInOut(duration: 0.22), value: isTransportVisible)
+                        .onHover { isHoveringTransport = $0 }
                         .padding(.top, 18)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)).combined(with: .move(edge: .bottom)))
                 }
                 
                 PlayPlaylistButtonOnly()
+                    .opacity(isPlaylistVisible ? 1.0 : 0.0)
+                    .scaleEffect(isPlaylistVisible ? 1.0 : 0.95)
+                    .allowsHitTesting(isPlaylistVisible)
+                    .animation(.easeInOut(duration: 0.22), value: isPlaylistVisible)
+                    .onHover { isHoveringPlaylist = $0 }
                     .padding(.horizontal, 28)
                     .padding(.top, music.showPlaybackControls ? 38 : 18)
                     .padding(.bottom, 24)
@@ -201,6 +221,20 @@ struct StandardPlayerView: View {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 1)
         )
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                isHoveringApp = true
+                cursorLocation = location
+            case .ended:
+                isHoveringApp = false
+                cursorLocation = nil
+            }
+        }
+        .onHover { hovering in
+            isHoveringApp = hovering
+            if !hovering { cursorLocation = nil }
+        }
         .animation(.timingCurve(0.16, 1.0, 0.3, 1.0, duration: 0.5), value: music.playlistExpanded)
     }
 }
@@ -213,8 +247,14 @@ struct MiniPlayerView: View {
     @EnvironmentObject var music: MusicController
     @AppStorage("closeHidesPanel") private var closeHidesPanel = true
     @State private var isHoveringIcons = false
+    @State private var isHoveringApp = false
+    @State private var cursorLocation: CGPoint? = nil
+    @State private var isHoveringTransport = false
 
     var body: some View {
+        let isHeaderVisible = isHoveringApp && ((cursorLocation.map { $0.x > 270 && $0.y < 65 } ?? false) || isHoveringIcons)
+        let isTransportVisible = isHoveringApp && ((cursorLocation.map { $0.x > 270 && $0.y >= 45 } ?? false) || isHoveringTransport)
+
         ZStack {
             
             ZStack {
@@ -286,8 +326,10 @@ struct MiniPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1.0 : 0.65)
-                        .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
+                        .opacity(isHeaderVisible ? 1.0 : 0.0)
+                        .scaleEffect(isHeaderVisible ? 1.0 : 0.94)
+                        .allowsHitTesting(isHeaderVisible)
+                        .animation(.easeInOut(duration: 0.22), value: isHeaderVisible)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
                         .onHover { isHoveringIcons = $0 }
@@ -303,7 +345,11 @@ struct MiniPlayerView: View {
                 
                 if music.showPlaybackControls {
                     TransportControls()
-                        .scaleEffect(0.82)
+                        .scaleEffect(isTransportVisible ? 0.82 : 0.76)
+                        .opacity(isTransportVisible ? 1.0 : 0.0)
+                        .allowsHitTesting(isTransportVisible)
+                        .animation(.easeInOut(duration: 0.22), value: isTransportVisible)
+                        .onHover { isHoveringTransport = $0 }
                         .transition(.opacity.combined(with: .scale(scale: 0.82)))
                 }
             }
@@ -314,6 +360,20 @@ struct MiniPlayerView: View {
         .frame(width: 500, height: 140)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.15), lineWidth: 1))
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                isHoveringApp = true
+                cursorLocation = location
+            case .ended:
+                isHoveringApp = false
+                cursorLocation = nil
+            }
+        }
+        .onHover { hovering in
+            isHoveringApp = hovering
+            if !hovering { cursorLocation = nil }
+        }
     }
 }
 
@@ -326,8 +386,13 @@ struct CompactPlayerView: View {
     @AppStorage("closeHidesPanel") private var closeHidesPanel = true
     @State private var isHovering = false
     @State private var isHoveringIcons = false
+    @State private var cursorLocation: CGPoint? = nil
+    @State private var isHoveringTransport = false
     
     var body: some View {
+        let isHeaderVisible = isHovering && ((cursorLocation.map { $0.y < 80 } ?? false) || isHoveringIcons)
+        let isTransportVisible = isHovering && ((cursorLocation.map { $0.y > 130 } ?? false) || isHoveringTransport)
+
         ZStack {
             
             ZStack {
@@ -394,8 +459,10 @@ struct CompactPlayerView: View {
                                 }
                             }
                         }
-                        .opacity(isHoveringIcons ? 1.0 : 0.65)
-                        .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
+                        .opacity(isHeaderVisible ? 1.0 : 0.0)
+                        .scaleEffect(isHeaderVisible ? 1.0 : 0.94)
+                        .allowsHitTesting(isHeaderVisible)
+                        .animation(.easeInOut(duration: 0.22), value: isHeaderVisible)
                         .padding(12)
                         .background(Color.white.opacity(0.0001))
                         .onHover { isHoveringIcons = $0 }
@@ -408,7 +475,11 @@ struct CompactPlayerView: View {
                         
                         if music.showPlaybackControls {
                             TransportControls()
-                                .scaleEffect(0.85)
+                                .scaleEffect(isTransportVisible ? 0.85 : 0.78)
+                                .opacity(isTransportVisible ? 1.0 : 0.0)
+                                .allowsHitTesting(isTransportVisible)
+                                .animation(.easeInOut(duration: 0.22), value: isTransportVisible)
+                                .onHover { isHoveringTransport = $0 }
                                 .transition(.opacity.combined(with: .scale(scale: 0.85)))
                         }
                     }.padding(.bottom, 24)
@@ -421,7 +492,20 @@ struct CompactPlayerView: View {
         .contentShape(Rectangle())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.15), lineWidth: 1))
-        .onHover { isHovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                isHovering = true
+                cursorLocation = location
+            case .ended:
+                isHovering = false
+                cursorLocation = nil
+            }
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if !hovering { cursorLocation = nil }
+        }
     }
 }
 
@@ -432,6 +516,7 @@ struct CompactPlayerView: View {
 struct LyricsWindowView: View {
     @EnvironmentObject var music: MusicController
     @State private var isHovering = false
+    @State private var cursorLocation: CGPoint? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -514,10 +599,23 @@ struct LyricsWindowView: View {
                 }
             }
             
-            LyricsHeaderBar(isHovered: isHovering)
+            LyricsHeaderBar(isHovered: isHovering, cursorLocation: cursorLocation)
         }
         .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                isHovering = true
+                cursorLocation = location
+            case .ended:
+                isHovering = false
+                cursorLocation = nil
+            }
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if !hovering { cursorLocation = nil }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
@@ -535,10 +633,12 @@ struct LyricsWindowView: View {
 struct LyricsHeaderBar: View {
     @EnvironmentObject var music: MusicController
     var isHovered: Bool = false
+    var cursorLocation: CGPoint? = nil
     @State private var isHoveringIcons = false
 
     var body: some View {
-        let showButtons = isHovered || isHoveringIcons
+        let isProximity = cursorLocation.map { $0.y < 90 } ?? false
+        let showButtons = isHovered && (isProximity || isHoveringIcons)
 
         HStack {
             Spacer()
@@ -576,8 +676,9 @@ struct LyricsHeaderBar: View {
                 }
             }
             .opacity(showButtons ? 1.0 : 0.0)
+            .scaleEffect(showButtons ? 1.0 : 0.94)
             .allowsHitTesting(showButtons)
-            .animation(.easeInOut(duration: 0.2), value: showButtons)
+            .animation(.easeInOut(duration: 0.22), value: showButtons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
             .onHover { isHoveringIcons = $0 }
@@ -655,15 +756,20 @@ struct CompactUtilityButton: View {
 struct HeaderBar: View {
     @EnvironmentObject var music: MusicController
     @AppStorage("closeHidesPanel") private var closeHidesPanel = true
+    var isVisible: Bool = false
     @State private var isHoveringIcons = false
 
     var body: some View {
+        let showButtons = isVisible || isHoveringIcons
+
         HStack(spacing: 8) {
             HStack(spacing: 3.5) {
                 ForEach(0..<3) { i in NowPlayingDot(index: i, isActive: music.isPlaying) }
             }
             .allowsHitTesting(false)
             .padding(.leading, 4)
+            .opacity(music.isPlaying ? 1.0 : (showButtons ? 0.6 : 0.0))
+            .animation(.easeInOut(duration: 0.2), value: showButtons)
             
             Spacer()
             
@@ -700,8 +806,10 @@ struct HeaderBar: View {
                     }
                 }
             }
-            .opacity(isHoveringIcons ? 1.0 : 0.65)
-            .animation(.easeInOut(duration: 0.2), value: isHoveringIcons)
+            .opacity(showButtons ? 1.0 : 0.0)
+            .scaleEffect(showButtons ? 1.0 : 0.94)
+            .allowsHitTesting(showButtons)
+            .animation(.easeInOut(duration: 0.22), value: showButtons)
             .padding(10)
             .background(Color.white.opacity(0.0001))
             .onHover { isHoveringIcons = $0 }
